@@ -37,7 +37,7 @@ export function StatusBar({ auth, agent, language }: Props) {
       <div className="status-right">
         <span>{auth?.loggedIn ? "Signed in" : "Not signed in"}</span>
         {language && <span>{language}</span>}
-        <span>AgentX</span>
+        <span>AbeX</span>
       </div>
     </footer>
   );

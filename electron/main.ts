@@ -88,7 +88,7 @@ function createWindow(): void {
     minWidth: 960,
     minHeight: 640,
     backgroundColor: "#1e1e1e",
-    title: "AgentX",
+    title: "AbeX",
     show: false,
     autoHideMenuBar: true,
     webPreferences: {

@@ -195,11 +195,11 @@ export function Sidebar({
                   checked={autoContinue}
                   onChange={(e) => onToggleAutoContinue(e.target.checked)}
                 />
-                <span>ავტომატურად გააგრძელე (Continue აღარ გჭირდება)</span>
+                <span>Auto-continue (no need for Continue)</span>
               </label>
               <p className="hint">
-                ჩართულია: თუ Grok მხოლოდ „გეგმას“ წერს და ჩერდება, AgentX თავად
-                აგრძელებს სრულ პასუხამდე. გამორთულია: მხოლოდ ხელით Continue.
+                On: if Grok only posts a plan and stops, AbeX auto-continues
+                until a full answer. Off: manual Continue only.
               </p>
               {autoContinue && (
                 <label className="toggle-row" style={{ marginTop: 8 }}>
