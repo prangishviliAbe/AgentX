@@ -94,18 +94,23 @@ export default function App() {
       window.agentx.on("acp:update", (updateUnknown) => {
         const update = updateUnknown as {
           sessionUpdate?: string;
-          content?: { text?: string };
+          content?: { text?: string } | string;
+          text?: string;
           title?: string;
           status?: string;
           kind?: string;
+          toolCallId?: string;
         };
 
         const kind = update.sessionUpdate || "";
+        const chunk =
+          typeof update.content === "string"
+            ? update.content
+            : update.content?.text || update.text || "";
 
         if (kind === "agent_message_chunk") {
-          const chunk = update.content?.text || "";
           if (!chunk) return;
-
+          // New assistant bubble after tools — do not reuse cleared streaming id
           setMessages((prev) => {
             const id = streamingId.current;
             if (id) {
@@ -131,7 +136,6 @@ export default function App() {
         }
 
         if (kind === "agent_thought_chunk") {
-          const chunk = update.content?.text || "";
           if (!chunk) return;
           setMessages((prev) => {
             const id = thoughtId.current;
@@ -147,7 +151,8 @@ export default function App() {
           return;
         }
 
-        if (kind === "tool_call" || kind === "tool_call_update") {
+        if (kind === "tool_call") {
+          // Close open assistant stream before tools; start a fresh one after
           if (streamingId.current) {
             const id = streamingId.current;
             streamingId.current = null;
@@ -156,20 +161,77 @@ export default function App() {
             );
           }
           thoughtId.current = null;
-
-          const title = update.title || "tool";
-          const status =
-            update.status || (kind === "tool_call" ? "running" : "");
+          const title = update.title || update.toolCallId || "tool";
           setMessages((prev) => [
             ...prev,
             {
               id: uid(),
               role: "tool",
-              content: status ? `${title} · ${status}` : title,
+              content: `${title} · running`,
               meta: update.kind,
             },
           ]);
+          return;
         }
+
+        if (kind === "tool_call_update") {
+          const title = update.title || "tool";
+          const status = update.status || "updated";
+          // Only surface meaningful status changes (avoid spam + empty titles)
+          if (
+            status === "completed" ||
+            status === "failed" ||
+            status === "cancelled" ||
+            update.title
+          ) {
+            setMessages((prev) => [
+              ...prev,
+              {
+                id: uid(),
+                role: "tool",
+                content: `${title} · ${status}`,
+                meta: update.kind,
+              },
+            ]);
+          }
+        }
+      }),
+
+      window.agentx.on("acp:turn-complete", (infoUnknown) => {
+        const info = infoUnknown as {
+          assistantText?: string;
+          thoughtText?: string;
+        };
+        const text = (info.assistantText || "").trim();
+        if (!text) return;
+        setMessages((prev) => {
+          // If we already streamed the same (or longer) text, skip
+          const lastAssistant = [...prev]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (
+            lastAssistant &&
+            (lastAssistant.content === text ||
+              text.startsWith(lastAssistant.content) ||
+              lastAssistant.content.includes(text.slice(0, 40)))
+          ) {
+            return prev.map((m) =>
+              m.id === lastAssistant.id
+                ? { ...m, content: text, streaming: false }
+                : m,
+            );
+          }
+          return [
+            ...prev,
+            {
+              id: uid(),
+              role: "assistant",
+              content: text,
+              streaming: false,
+            },
+          ];
+        });
+        streamingId.current = null;
       }),
 
       window.agentx.on("acp:permission", (reqUnknown) => {
@@ -368,7 +430,7 @@ export default function App() {
         await startAgent();
       }
       const snapshotPaths = tabs.map((t) => t.path);
-      await window.agentx.acpPrompt(
+      const result = (await window.agentx.acpPrompt(
         text,
         snapshotPaths,
         images.map((img) => ({
@@ -376,7 +438,36 @@ export default function App() {
           data: img.data,
           uri: img.name ? `attachment://${img.name}` : undefined,
         })),
-      );
+      )) as { assistantText?: string } | boolean;
+
+      // Fallback if streaming events were missed by the renderer
+      const finalText =
+        result && typeof result === "object"
+          ? (result.assistantText || "").trim()
+          : "";
+      if (finalText) {
+        setMessages((prev) => {
+          const lastAssistant = [...prev]
+            .reverse()
+            .find((m) => m.role === "assistant");
+          if (lastAssistant?.content) {
+            return prev.map((m) =>
+              m.id === lastAssistant.id
+                ? { ...m, content: finalText, streaming: false }
+                : m,
+            );
+          }
+          return [
+            ...prev,
+            {
+              id: uid(),
+              role: "assistant",
+              content: finalText,
+              streaming: false,
+            },
+          ];
+        });
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [

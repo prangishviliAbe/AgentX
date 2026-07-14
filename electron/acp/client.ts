@@ -52,6 +52,19 @@ type Pending = {
   reject: (err: Error) => void;
 };
 
+/** Pull human-visible text out of heterogeneous ACP update shapes. */
+export function extractUpdateText(update: Record<string, unknown>): string {
+  const content = update.content;
+  if (typeof content === "string") return content;
+  if (content && typeof content === "object") {
+    const c = content as { text?: unknown; content?: unknown };
+    if (typeof c.text === "string") return c.text;
+    if (typeof c.content === "string") return c.content;
+  }
+  if (typeof update.text === "string") return update.text;
+  return "";
+}
+
 function resolveGrokBinary(): string {
   if (process.env.GROK_BIN && existsSync(process.env.GROK_BIN)) {
     return process.env.GROK_BIN;
@@ -199,14 +212,31 @@ export class GrokAcpClient extends EventEmitter {
   async prompt(
     text: string,
     images?: Array<{ mimeType: string; data: string; uri?: string }>,
-  ): Promise<void> {
+  ): Promise<{ assistantText: string; thoughtText: string }> {
     if (!this.sessionId) throw new Error("ACP session not ready");
     const prompt = buildPromptBlocks(text, images);
 
-    await this.request("session/prompt", {
-      sessionId: this.sessionId,
-      prompt,
-    });
+    let assistantText = "";
+    let thoughtText = "";
+    const onUpdate = (update: AcpUpdate) => {
+      const kind = update.sessionUpdate;
+      const chunk = extractUpdateText(update);
+      if (!chunk) return;
+      if (kind === "agent_message_chunk") assistantText += chunk;
+      if (kind === "agent_thought_chunk") thoughtText += chunk;
+    };
+    this.on("update", onUpdate);
+    try {
+      await this.request("session/prompt", {
+        sessionId: this.sessionId,
+        prompt,
+      });
+    } finally {
+      this.off("update", onUpdate);
+    }
+
+    this.emit("turn-complete", { assistantText, thoughtText });
+    return { assistantText, thoughtText };
   }
 
   async respondPermission(

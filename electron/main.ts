@@ -197,6 +197,10 @@ function bindAcp(client: GrokAcpClient): void {
     send("acp:permission", req);
   });
 
+  client.on("turn-complete", (info) => {
+    send("acp:turn-complete", info);
+  });
+
   client.on("stderr", (text: string) => {
     send("acp:log", { level: "stderr", text });
   });
@@ -459,7 +463,7 @@ function registerIpc(): void {
         for (const p of snapshotPaths) watchedPaths.add(p);
         await changes.captureBefore(snapshotPaths);
       }
-      await acp!.prompt(text, images);
+      const turn = await acp!.prompt(text, images);
       // After turn, re-check watched paths
       for (const p of watchedPaths) {
         const change = await changes.captureAfter(p);
@@ -472,7 +476,11 @@ function registerIpc(): void {
           });
         }
       }
-      return true;
+      return {
+        ok: true,
+        assistantText: turn.assistantText,
+        thoughtText: turn.thoughtText,
+      };
     },
   );
 
