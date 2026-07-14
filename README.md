@@ -14,9 +14,11 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 | **Product** | AgentX |
 | **Codename** | AbeX |
 | **Author** | Abe Prangishvili |
-| **Version** | 1.0.0 |
+| **Version** | 1.1.0 |
 | **License** | MIT |
 | **Repo** | [github.com/prangishviliAbe/AgentX](https://github.com/prangishviliAbe/AgentX) |
+
+Full release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ---
 
@@ -24,11 +26,48 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 
 - **Explorer + Monaco editor** — open a folder, edit files, save with Ctrl/Cmd+S  
 - **Grok chat** — ACP stream over `grok agent stdio` (same login as the CLI)  
-- **Screenshots / images** — paste (Ctrl+V) or **Attach** images for visual analysis  
+- **Thinking (live)** — optional live thought stream in the chat panel  
+- **Auto-continue** — header **Auto** toggle; keeps going when the model only posts a short plan  
+- **Plan first** — for create/build/game work, plan + confirm before writing files  
+- **Screenshots / images** — paste (Ctrl+V) or **Attach** for visual analysis  
 - **Tool permissions** — Allow/Deny modal, or auto-approve in Settings  
+- **Stop** — cancel a stuck turn and unlock the composer  
 - **Changes / diffs** — unified diff of agent edits; Apply or Reject  
 - **Integrated terminal** — real PowerShell/shell in the workspace cwd  
 - **Windows installer** — `npm run dist` → NSIS setup under `release/`
+
+---
+
+## Changelog
+
+### 1.1.0 — 2026-07-14
+
+**Added**
+
+- Chat header **Auto** toggle (persist auto-continue without opening Settings)
+- **Plan first** and **Show thinking** settings
+- Live thinking panel + durable “thinking” messages
+- Image paste/attach for screenshot analysis (ACP image blocks)
+- **Stop** button, turn timeout, and silence auto-stop so the UI does not freeze
+- ACP `fs/*` + `terminal/*` client handlers so the agent can read the workspace correctly
+- Branding: product **AgentX**, English **codename AbeX**
+
+**Fixed**
+
+- Windows PowerShell one-liner spawn crash (`ENOENT` / main-process error dialog)
+- Stuck **Grok · working…** after auto-continue (no more cancel-before-every-prompt)
+- Missing final assistant text after tools
+- Tool status spam and weak incomplete-answer detection
+
+**Changed**
+
+- Settings file: `~/.agentx/settings.json`
+
+### 1.0.0 — 2026-07-14
+
+Initial public release: explorer, Monaco, Grok chat, permissions, diffs, terminal, and Windows packaging.
+
+See **[CHANGELOG.md](./CHANGELOG.md)** for the full list.
 
 ---
 
@@ -62,10 +101,11 @@ First launch:
 
 1. **Open Folder** — choose a project  
 2. **Settings** → confirm **Signed in** (or **Login with Grok**)  
-3. Chat in the right panel  
-4. Optional: turn **off** *Auto-approve tool calls* for Allow/Deny prompts  
-5. **Changes** (activity bar) — review agent file edits  
-6. **Terminal** — run shell commands in the workspace  
+3. Chat header → turn **Auto** on (optional)  
+4. Settings → **Plan first** / **Show thinking** as you prefer  
+5. Chat in the right panel  
+6. **Changes** — review agent file edits  
+7. **Terminal** — shell in the workspace  
 
 ---
 
@@ -74,7 +114,7 @@ First launch:
 | Command | Description |
 |---------|-------------|
 | `npm run dev` | Development (Vite + Electron) |
-| `npm test` | Unit tests (permission, diff, terminal, wiring) |
+| `npm test` | Unit tests |
 | `npm run typecheck` | TypeScript checks |
 | `npm run build` | Production build |
 | `npm run pack` | Unpackaged app → `release/win-unpacked/` |
@@ -90,7 +130,7 @@ npm run dist
 
 Artifacts:
 
-- `release/AgentX Setup 1.0.0.exe` — installer  
+- `release/AgentX Setup 1.1.0.exe` — installer  
 - `release/win-unpacked/AgentX.exe` — portable run  
 
 ---
@@ -102,17 +142,20 @@ Artifacts:
 | Open folder | Title bar **Open Folder** or Ctrl/Cmd+O |
 | Save file | Ctrl/Cmd+S |
 | Focus terminal | Ctrl/Cmd+\` (backtick) |
+| Auto-continue | Chat header **Auto** (or Settings) |
+| Plan before build | Settings → **Plan first** |
+| Show thinking | Settings → **Show thinking process** |
+| Stop a stuck turn | Chat header **Stop** |
 | Tool prompts | Settings → uncheck **Auto-approve tool calls** |
-| Apply agent edits | **Changes** → Apply / Reject (or Apply all) |
+| Apply agent edits | **Changes** → Apply / Reject |
 | Login | Settings → **Login with Grok** |
 | Paste screenshot | Focus chat → **Ctrl+V** (or **Attach**) |
-| Auto-continue | Settings → **ავტომატურად გააგრძელე** (default on) |
 
 AgentX reuses credentials from `~/.grok/auth.json` (same as CLI). Set `GROK_BIN` if `grok` is not on `PATH`.
 
-Preferences (auto-approve, auto-continue) are saved in `~/.agentx/settings.json`.
+Preferences are saved in `~/.agentx/settings.json`.
 
-Workspace files (e.g. `package.json`) are served to Grok over ACP `fs/read_text_file` so the agent sees the open project correctly.
+Workspace files are available to Grok over ACP `fs/read_text_file`.
 
 ---
 
@@ -122,6 +165,7 @@ Workspace files (e.g. `package.json`) are served to Grok over ACP `fs/read_text_
 ┌──────────────────────────────────┐
 │  AgentX (Electron + React UI)    │
 │  Explorer · Diff · Term · Chat   │
+│  codename AbeX                   │
 └──────────────┬───────────────────┘
                │ IPC
 ┌──────────────▼───────────────────┐
@@ -143,9 +187,11 @@ Stack: **Electron · React · TypeScript · Monaco · Vite · electron-builder**
 
 ```
 AgentX/
-  electron/          # main process, ACP, FS, terminal
+  electron/          # main process, ACP, FS, terminal, settings
   src/               # React UI
-  tests/             # permission, diff, terminal, structural tests
+  tests/             # unit tests
+  assets/            # cover image
+  CHANGELOG.md
   package.json
 ```
 
@@ -155,7 +201,7 @@ AgentX/
 
 ```bash
 npm install
-npm run dev          # hot reload UI + Electron
+npm run dev
 npm test
 npm run typecheck
 ```

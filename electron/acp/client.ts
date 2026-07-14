@@ -194,7 +194,7 @@ export class GrokAcpClient extends EventEmitter {
       protocolVersion: 1,
       clientInfo: {
         name: "AgentX",
-        version: "1.0.0",
+        version: "1.1.0",
       },
       clientCapabilities: {
         fs: { readTextFile: true, writeTextFile: true },
