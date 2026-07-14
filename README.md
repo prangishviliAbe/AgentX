@@ -1,5 +1,9 @@
 # AgentX
 
+<p align="center">
+  <img src="assets/cover.png" alt="AgentX — VS Code-style desktop shell for the Grok coding agent" width="100%" />
+</p>
+
 **VS Code–style desktop shell for the [Grok](https://x.ai) coding agent.**
 
 Edit code, chat with Grok, approve tools, review diffs, and run a real terminal — all powered by your local **Grok CLI** account.
