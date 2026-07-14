@@ -16,12 +16,22 @@ export type OpenTab = {
 
 export type ChatRole = "user" | "assistant" | "system" | "tool" | "thought";
 
+export type ChatImage = {
+  id: string;
+  name: string;
+  mimeType: string;
+  /** Base64 without data: prefix */
+  data: string;
+  previewUrl: string;
+};
+
 export type ChatMessage = {
   id: string;
   role: ChatRole;
   content: string;
   streaming?: boolean;
   meta?: string;
+  images?: ChatImage[];
 };
 
 export type AuthStatus = {

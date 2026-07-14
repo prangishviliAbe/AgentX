@@ -11,6 +11,8 @@ import {
   type PermissionDecision,
   type PermissionRequestPayload,
 } from "./permission";
+import { AcpClientHandlers } from "./clientHandlers";
+import { buildPromptBlocks } from "./promptBlocks";
 
 export type AcpUpdate =
   | {
@@ -83,6 +85,7 @@ export class GrokAcpClient extends EventEmitter {
   private cwd: string;
   private alwaysApprove: boolean;
   private started = false;
+  private handlers = new AcpClientHandlers();
 
   constructor(options: { cwd: string; alwaysApprove?: boolean }) {
     super();
@@ -187,12 +190,20 @@ export class GrokAcpClient extends EventEmitter {
     this.emit("ready", { sessionId: this.sessionId, cwd: this.cwd });
   }
 
-  async prompt(text: string): Promise<void> {
+  /**
+   * Send a user prompt. Blocks may include text and base64 images
+   * (ACP ContentBlock: { type: "text" } | { type: "image", mimeType, data }).
+   */
+  async prompt(
+    text: string,
+    images?: Array<{ mimeType: string; data: string; uri?: string }>,
+  ): Promise<void> {
     if (!this.sessionId) throw new Error("ACP session not ready");
+    const prompt = buildPromptBlocks(text, images);
 
     await this.request("session/prompt", {
       sessionId: this.sessionId,
-      prompt: [{ type: "text", text }],
+      prompt,
     });
   }
 
@@ -223,6 +234,7 @@ export class GrokAcpClient extends EventEmitter {
   }
 
   stop(): void {
+    this.handlers.dispose();
     if (this.rl) {
       this.rl.close();
       this.rl = null;
@@ -247,6 +259,7 @@ export class GrokAcpClient extends EventEmitter {
       return;
     }
 
+    // Response to our request
     if (typeof msg.id === "number" && this.pending.has(msg.id)) {
       const pending = this.pending.get(msg.id)!;
       this.pending.delete(msg.id);
@@ -259,30 +272,13 @@ export class GrokAcpClient extends EventEmitter {
       return;
     }
 
-    // Permission request (server -> client request)
+    // Server → client request
     if (typeof msg.id !== "undefined" && typeof msg.method === "string") {
-      const method = msg.method;
-      if (
-        method === "session/request_permission" ||
-        method === "requestPermission" ||
-        method.endsWith("/request_permission")
-      ) {
-        const normalized = normalizePermissionRequest(
-          msg.id as number | string,
-          (msg.params || {}) as Record<string, unknown>,
-        );
-        if (this.alwaysApprove) {
-          this.write(
-            buildAlwaysApproveResponse(normalized.requestId, normalized.options),
-          );
-        } else {
-          this.emit("permission", normalized);
-        }
-        return;
-      }
-
-      // Unknown server request — acknowledge empty result to avoid hangs
-      this.write({ jsonrpc: "2.0", id: msg.id, result: {} });
+      void this.handleServerRequest(
+        msg.id as number | string,
+        msg.method,
+        (msg.params || {}) as Record<string, unknown>,
+      );
       return;
     }
 
@@ -295,6 +291,45 @@ export class GrokAcpClient extends EventEmitter {
         return;
       }
       this.emit("notification", msg);
+    }
+  }
+
+  private async handleServerRequest(
+    id: number | string,
+    method: string,
+    params: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      if (
+        method === "session/request_permission" ||
+        method === "requestPermission" ||
+        method.endsWith("/request_permission")
+      ) {
+        const normalized = normalizePermissionRequest(id, params);
+        if (this.alwaysApprove) {
+          this.write(
+            buildAlwaysApproveResponse(
+              normalized.requestId,
+              normalized.options,
+            ),
+          );
+        } else {
+          this.emit("permission", normalized);
+        }
+        return;
+      }
+
+      const result = await this.handlers.handle(method, params);
+      this.write({ jsonrpc: "2.0", id, result });
+    } catch (err) {
+      this.write({
+        jsonrpc: "2.0",
+        id,
+        error: {
+          code: -32000,
+          message: err instanceof Error ? err.message : String(err),
+        },
+      });
     }
   }
 

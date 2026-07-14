@@ -251,6 +251,63 @@ function registerIpc(): void {
 
   ipcMain.handle("auth:status", async () => checkAuthStatus());
 
+  /** Pick image files from disk (for chat attachments). */
+  ipcMain.handle("dialog:open-images", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openFile", "multiSelections"],
+      title: "Attach images / screenshots",
+      filters: [
+        {
+          name: "Images",
+          extensions: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"],
+        },
+      ],
+    });
+    if (result.canceled || !result.filePaths.length) return [];
+    const out: Array<{
+      name: string;
+      path: string;
+      mimeType: string;
+      data: string;
+      previewUrl: string;
+    }> = [];
+    for (const filePath of result.filePaths) {
+      try {
+        const { readFile } = await import("node:fs/promises");
+        const buf = await readFile(filePath);
+        if (buf.byteLength > 8_000_000) {
+          throw new Error(`Image too large (>8MB): ${path.basename(filePath)}`);
+        }
+        const ext = path.extname(filePath).toLowerCase().replace(".", "");
+        const mime =
+          ext === "jpg" || ext === "jpeg"
+            ? "image/jpeg"
+            : ext === "gif"
+              ? "image/gif"
+              : ext === "webp"
+                ? "image/webp"
+                : ext === "bmp"
+                  ? "image/bmp"
+                  : ext === "svg"
+                    ? "image/svg+xml"
+                    : "image/png";
+        const data = buf.toString("base64");
+        out.push({
+          name: path.basename(filePath),
+          path: filePath,
+          mimeType: mime,
+          data,
+          previewUrl: `data:${mime};base64,${data}`,
+        });
+      } catch (err) {
+        send("acp:error", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return out;
+  });
+
   ipcMain.handle("auth:login", async () => {
     const bin = getGrokBinaryPath();
     return new Promise<{ ok: boolean; message: string }>((resolve) => {
@@ -364,7 +421,12 @@ function registerIpc(): void {
 
   ipcMain.handle(
     "acp:prompt",
-    async (_e, text: string, snapshotPaths?: string[]) => {
+    async (
+      _e,
+      text: string,
+      snapshotPaths?: string[],
+      images?: Array<{ mimeType: string; data: string; uri?: string }>,
+    ) => {
       if (!acp?.isRunning) {
         if (!workspacePath) {
           throw new Error("Open a folder before chatting with Grok.");
@@ -375,7 +437,7 @@ function registerIpc(): void {
         for (const p of snapshotPaths) watchedPaths.add(p);
         await changes.captureBefore(snapshotPaths);
       }
-      await acp!.prompt(text);
+      await acp!.prompt(text, images);
       // After turn, re-check watched paths
       for (const p of watchedPaths) {
         const change = await changes.captureAfter(p);

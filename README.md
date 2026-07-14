@@ -21,6 +21,7 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 
 - **Explorer + Monaco editor** — open a folder, edit files, save with Ctrl/Cmd+S  
 - **Grok chat** — ACP stream over `grok agent stdio` (same login as the CLI)  
+- **Screenshots / images** — paste (Ctrl+V) or **Attach** images for visual analysis  
 - **Tool permissions** — Allow/Deny modal, or auto-approve in Settings  
 - **Changes / diffs** — unified diff of agent edits; Apply or Reject  
 - **Integrated terminal** — real PowerShell/shell in the workspace cwd  
@@ -101,8 +102,11 @@ Artifacts:
 | Tool prompts | Settings → uncheck **Auto-approve tool calls** |
 | Apply agent edits | **Changes** → Apply / Reject (or Apply all) |
 | Login | Settings → **Login with Grok** |
+| Paste screenshot | Focus chat → **Ctrl+V** (or **Attach**) |
 
 AgentX reuses credentials from `~/.grok/auth.json` (same as CLI). Set `GROK_BIN` if `grok` is not on `PATH`.
+
+Workspace files (e.g. `package.json`) are served to Grok over ACP `fs/read_text_file` so the agent sees the open project correctly.
 
 ---
 

@@ -48,9 +48,13 @@ const api = {
 
   acpStart: (cwd?: string) => ipcRenderer.invoke("acp:start", cwd),
   acpStop: () => ipcRenderer.invoke("acp:stop"),
-  acpPrompt: (text: string, snapshotPaths?: string[]) =>
-    ipcRenderer.invoke("acp:prompt", text, snapshotPaths),
+  acpPrompt: (
+    text: string,
+    snapshotPaths?: string[],
+    images?: Array<{ mimeType: string; data: string; uri?: string }>,
+  ) => ipcRenderer.invoke("acp:prompt", text, snapshotPaths, images),
   acpStatus: () => ipcRenderer.invoke("acp:status"),
+  openImages: () => ipcRenderer.invoke("dialog:open-images"),
   acpPermissionResponse: (
     requestId: number | string,
     decisionOrOptionId: string,

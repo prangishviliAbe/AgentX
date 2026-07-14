@@ -10,6 +10,7 @@ import { fileName, languageFromPath } from "./lib/language";
 import type {
   AgentStatus,
   AuthStatus,
+  ChatImage,
   ChatMessage,
   FileDiff,
   FileNode,
@@ -341,13 +342,22 @@ export default function App() {
     );
   };
 
-  const sendPrompt = async (text: string) => {
+  const sendPrompt = async (text: string, images: ChatImage[] = []) => {
     streamingId.current = null;
     thoughtId.current = null;
 
     setMessages((prev) => [
       ...prev,
-      { id: uid(), role: "user", content: text },
+      {
+        id: uid(),
+        role: "user",
+        content:
+          text ||
+          (images.length
+            ? `[${images.length} image(s) attached for analysis]`
+            : ""),
+        images: images.length ? images : undefined,
+      },
     ]);
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
 
@@ -356,7 +366,15 @@ export default function App() {
         await startAgent();
       }
       const snapshotPaths = tabs.map((t) => t.path);
-      await window.agentx.acpPrompt(text, snapshotPaths);
+      await window.agentx.acpPrompt(
+        text,
+        snapshotPaths,
+        images.map((img) => ({
+          mimeType: img.mimeType,
+          data: img.data,
+          uri: img.name ? `attachment://${img.name}` : undefined,
+        })),
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
@@ -581,7 +599,22 @@ export default function App() {
           messages={messages}
           busy={agent.busy}
           disabledReason={disabledReason}
-          onSend={(text) => void sendPrompt(text)}
+          onSend={(text, images) => void sendPrompt(text, images)}
+          onPickImages={async () => {
+            const picked = (await window.agentx.openImages()) as Array<{
+              name: string;
+              mimeType: string;
+              data: string;
+              previewUrl: string;
+            }>;
+            return picked.map((p) => ({
+              id: uid(),
+              name: p.name,
+              mimeType: p.mimeType,
+              data: p.data,
+              previewUrl: p.previewUrl,
+            }));
+          }}
           onClear={() => {
             streamingId.current = null;
             thoughtId.current = null;

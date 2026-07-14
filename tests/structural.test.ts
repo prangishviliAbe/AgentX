@@ -43,4 +43,14 @@ describe("UI/IPC structural wiring", () => {
     assert.ok(preload.includes("termStart"));
     assert.ok(read("src/components/Sidebar.tsx").includes("TerminalPanel"));
   });
+
+  it("image attach / paste / ACP image blocks exist", () => {
+    const chat = read("src/components/ChatPanel.tsx");
+    assert.ok(chat.includes("onPaste"));
+    assert.ok(chat.includes("Attach"));
+    assert.ok(read("electron/acp/promptBlocks.ts").includes('type: "image"'));
+    assert.ok(read("electron/main.ts").includes("dialog:open-images"));
+    assert.ok(read("electron/acp/clientHandlers.ts").includes("fs/read_text_file"));
+  });
 });
+
