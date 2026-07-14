@@ -942,3 +942,26 @@ button:disabled {
   border-color: #0a84d0 !important;
   color: #b8d4ea !important;
 }
+
+.titlebar-brand .codename {
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+}
+.status-codename {
+  opacity: 0.85;
+  font-size: 11px;
+}
+.codename-line {
+  margin: 0 0 12px !important;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
+}

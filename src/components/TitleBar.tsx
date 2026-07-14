@@ -10,7 +10,8 @@ export function TitleBar({ workspace, onOpenFolder, onSave, canSave }: Props) {
     <header className="titlebar">
       <div className="titlebar-brand">
         <span className="mark">A</span>
-        <span>AbeX</span>
+        <span>AgentX</span>
+        <span className="codename">codename AbeX</span>
       </div>
       <div className="titlebar-path" title={workspace || undefined}>
         {workspace || "No folder opened"}

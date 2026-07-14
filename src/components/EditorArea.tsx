@@ -60,7 +60,8 @@ export function EditorArea({
         {!active ? (
           <div className="editor-empty">
             <div>
-              <h2>AbeX</h2>
+              <h2>AgentX</h2>
+              <p className="codename-line">codename AbeX</p>
               <p>
                 Open a folder, edit files, and talk to Grok in the side panel —
                 your Grok CLI account powers the agent.

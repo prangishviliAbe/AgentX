@@ -1,7 +1,7 @@
 {
   "name": "agentx",
   "version": "1.0.0",
-  "description": "AbeX — VS Code-style desktop shell for the Grok coding agent",
+  "description": "AgentX (codename AbeX) — VS Code-style desktop shell for the Grok coding agent",
   "author": "Abe Prangishvili",
   "license": "MIT",
   "repository": {
@@ -55,7 +55,7 @@
   },
   "build": {
     "appId": "com.agentx.app",
-    "productName": "AbeX",
+    "productName": "AgentX",
     "directories": {
       "output": "release"
     },

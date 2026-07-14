@@ -1,15 +1,17 @@
-# AbeX
+# AgentX
 
 <p align="center">
-  <img src="assets/cover.png" alt="AbeX — VS Code-style desktop shell for the Grok coding agent" width="100%" />
+  <img src="assets/cover.png" alt="AgentX (codename AbeX) — VS Code-style desktop shell for the Grok coding agent" width="100%" />
 </p>
 
-**AbeX** — VS Code–style desktop shell for the [Grok](https://x.ai) coding agent.
+**AgentX** — VS Code–style desktop shell for the [Grok](https://x.ai) coding agent.  
+**Codename:** AbeX
 
 Edit code, chat with Grok, approve tools, review diffs, and run a real terminal — all powered by your local **Grok CLI** account.
 
 | | |
 |---|---|
+| **Product** | AgentX |
 | **Codename** | AbeX |
 | **Author** | Abe Prangishvili |
 | **Version** | 1.0.0 |

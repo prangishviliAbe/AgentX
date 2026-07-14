@@ -166,7 +166,7 @@ export class GrokAcpClient extends EventEmitter {
     await this.request("initialize", {
       protocolVersion: 1,
       clientInfo: {
-        name: "AbeX",
+        name: "AgentX",
         version: "1.0.0",
       },
       clientCapabilities: {

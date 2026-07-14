@@ -198,7 +198,7 @@ export function Sidebar({
                 <span>Auto-continue (no need for Continue)</span>
               </label>
               <p className="hint">
-                On: if Grok only posts a plan and stops, AbeX auto-continues
+                On: if Grok only posts a plan and stops, AgentX auto-continues
                 until a full answer. Off: manual Continue only.
               </p>
               {autoContinue && (
