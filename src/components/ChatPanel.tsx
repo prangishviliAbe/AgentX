@@ -5,6 +5,8 @@ type Props = {
   messages: ChatMessage[];
   busy: boolean;
   disabledReason: string | null;
+  canContinue?: boolean;
+  onContinue?: () => void;
   onSend: (text: string, images: ChatImage[]) => void;
   onClear: () => void;
   onPickImages: () => Promise<ChatImage[]>;
@@ -40,6 +42,8 @@ export function ChatPanel({
   messages,
   busy,
   disabledReason,
+  canContinue,
+  onContinue,
   onSend,
   onClear,
   onPickImages,
@@ -82,10 +86,27 @@ export function ChatPanel({
   return (
     <aside className="chat-panel">
       <div className="chat-header">
-        <span>Grok</span>
-        <button type="button" className="btn btn-ghost" onClick={onClear}>
-          Clear
-        </button>
+        <span>
+          Grok
+          {busy ? (
+            <span className="chat-busy-label"> · working…</span>
+          ) : null}
+        </span>
+        <div className="chat-header-actions">
+          {canContinue && onContinue && !busy && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              title="Force agent to continue"
+              onClick={onContinue}
+            >
+              Continue
+            </button>
+          )}
+          <button type="button" className="btn btn-ghost" onClick={onClear}>
+            Clear
+          </button>
+        </div>
       </div>
 
       <div className="chat-messages">
@@ -218,10 +239,12 @@ export function ChatPanel({
             </button>
             <span className="composer-hint">
               {busy
-                ? "Grok is working…"
+                ? "Grok is working — wait for tools & final answer…"
                 : attachments.length
                   ? `${attachments.length} image(s) · paste OK`
-                  : "Paste or attach screenshots"}
+                  : canContinue
+                    ? "Done for now — press Continue if the answer is incomplete"
+                    : "Paste or attach screenshots"}
             </span>
           </div>
           <button

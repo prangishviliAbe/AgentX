@@ -925,3 +925,14 @@ button:disabled {
   min-width: 0;
   flex: 1;
 }
+
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chat-busy-label {
+  color: #89d185;
+  font-weight: 500;
+  animation: pulse 1s ease-in-out infinite;
+}

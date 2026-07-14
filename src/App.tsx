@@ -7,6 +7,7 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { fileName, languageFromPath } from "./lib/language";
+import { CONTINUE_PROMPT, looksLikeIncompletePlan } from "./lib/incomplete";
 import type {
   AgentStatus,
   AuthStatus,
@@ -51,6 +52,8 @@ export default function App() {
   const thoughtId = useRef<string | null>(null);
   /** toolCallId → chat message id (update in place instead of spam) */
   const toolMsgIds = useRef<Map<string, string>>(new Map());
+  /** Prevent infinite auto-continue loops within one user ask */
+  const autoContinueLeft = useRef(0);
 
   const ensureAssistantFinal = useCallback((text: string) => {
     const finalText = text.trim();
@@ -445,27 +448,42 @@ export default function App() {
     );
   };
 
-  const sendPrompt = async (text: string, images: ChatImage[] = []) => {
+  const runAgentTurn = async (
+    text: string,
+    images: ChatImage[] = [],
+    opts?: { silentUser?: boolean },
+  ): Promise<string> => {
     streamingId.current = null;
     thoughtId.current = null;
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: uid(),
-        role: "user",
-        content:
-          text ||
-          (images.length
-            ? `[${images.length} image(s) attached for analysis]`
-            : ""),
-        images: images.length ? images : undefined,
-      },
-    ]);
+    if (!opts?.silentUser) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "user",
+          content:
+            text ||
+            (images.length
+              ? `[${images.length} image(s) attached for analysis]`
+              : ""),
+          images: images.length ? images : undefined,
+        },
+      ]);
+    } else {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "system",
+          content: "გრძელდება… (auto-continue)",
+        },
+      ]);
+    }
+
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
 
     try {
-      // Always ensure a live agent process (reconnect if previous session died)
       const st = (await window.agentx.acpStatus()) as { running?: boolean };
       if (!st.running) {
         await startAgent();
@@ -487,6 +505,7 @@ export default function App() {
           : "";
       ensureAssistantFinal(finalText);
       toolMsgIds.current.clear();
+      return finalText;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
@@ -494,6 +513,7 @@ export default function App() {
         { id: uid(), role: "system", content: message },
       ]);
       setAgent((a) => ({ ...a, lastError: message, running: false }));
+      return "";
     } finally {
       if (streamingId.current) {
         const id = streamingId.current;
@@ -507,6 +527,25 @@ export default function App() {
       if (workspace) void refreshTree(workspace);
       void refreshChanges();
     }
+  };
+
+  const sendPrompt = async (text: string, images: ChatImage[] = []) => {
+    // Allow up to 2 automatic continuations when the model only posts a plan
+    autoContinueLeft.current = 2;
+    let answer = await runAgentTurn(text, images);
+
+    while (
+      autoContinueLeft.current > 0 &&
+      looksLikeIncompletePlan(answer)
+    ) {
+      autoContinueLeft.current -= 1;
+      answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+    }
+  };
+
+  const continueAgent = async () => {
+    autoContinueLeft.current = 1;
+    await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
   };
 
   const respondPermission = async (decision: "allow" | "deny") => {
@@ -711,6 +750,12 @@ export default function App() {
           messages={messages}
           busy={agent.busy}
           disabledReason={disabledReason}
+          canContinue={
+            !agent.busy &&
+            !disabledReason &&
+            messages.some((m) => m.role === "assistant")
+          }
+          onContinue={() => void continueAgent()}
           onSend={(text, images) => void sendPrompt(text, images)}
           onPickImages={async () => {
             const picked = (await window.agentx.openImages()) as Array<{
@@ -730,6 +775,8 @@ export default function App() {
           onClear={() => {
             streamingId.current = null;
             thoughtId.current = null;
+            toolMsgIds.current.clear();
+            autoContinueLeft.current = 0;
             setMessages([]);
           }}
         />
