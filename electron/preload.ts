@@ -66,7 +66,8 @@ const api = {
     text: string,
     snapshotPaths?: string[],
     images?: Array<{ mimeType: string; data: string; uri?: string }>,
-  ) => ipcRenderer.invoke("acp:prompt", text, snapshotPaths, images),
+    opts?: { timeoutMs?: number },
+  ) => ipcRenderer.invoke("acp:prompt", text, snapshotPaths, images, opts),
   acpStatus: () => ipcRenderer.invoke("acp:status"),
   openImages: () => ipcRenderer.invoke("dialog:open-images"),
   acpPermissionResponse: (

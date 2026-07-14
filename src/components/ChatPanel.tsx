@@ -6,6 +6,8 @@ type Props = {
   busy: boolean;
   disabledReason: string | null;
   canContinue?: boolean;
+  autoContinue?: boolean;
+  onToggleAutoContinue?: (value: boolean) => void;
   activityHint?: string | null;
   liveThought?: string;
   showThinking?: boolean;
@@ -47,6 +49,8 @@ export function ChatPanel({
   busy,
   disabledReason,
   canContinue,
+  autoContinue,
+  onToggleAutoContinue,
   activityHint,
   liveThought,
   showThinking = true,
@@ -108,6 +112,19 @@ export function ChatPanel({
           ) : null}
         </span>
         <div className="chat-header-actions">
+          {onToggleAutoContinue && (
+            <label
+              className={`auto-chip ${autoContinue ? "on" : ""}`}
+              title="When on, AgentX continues automatically — no Continue spam"
+            >
+              <input
+                type="checkbox"
+                checked={Boolean(autoContinue)}
+                onChange={(e) => onToggleAutoContinue(e.target.checked)}
+              />
+              <span>Auto</span>
+            </label>
+          )}
           {busy && onStop && (
             <button
               type="button"
@@ -118,14 +135,13 @@ export function ChatPanel({
               Stop
             </button>
           )}
-          {canContinue && onContinue && (
+          {!autoContinue && canContinue && onContinue && (
             <button
               type="button"
               className="btn btn-primary"
               title="Force agent to continue"
               onClick={() => {
                 if (busy && onStop) onStop();
-                // slight delay so cancel lands before new prompt
                 window.setTimeout(() => onContinue(), busy ? 80 : 0);
               }}
             >
@@ -298,12 +314,14 @@ export function ChatPanel({
             </button>
             <span className="composer-hint">
               {busy
-                ? "Working… use Stop if stuck"
+                ? autoContinue
+                  ? "Auto on — continuing without you…"
+                  : "Working… use Stop if stuck"
                 : attachments.length
                   ? `${attachments.length} image(s) · paste OK`
-                  : canContinue
-                    ? "Auto-continue off — press Continue if incomplete"
-                    : "Paste or attach screenshots"}
+                  : autoContinue
+                    ? "Auto on — will continue by itself"
+                    : "Auto off — use Continue if incomplete"}
             </span>
           </div>
           {busy ? (

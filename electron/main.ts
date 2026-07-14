@@ -503,6 +503,7 @@ function registerIpc(): void {
       text: string,
       snapshotPaths?: string[],
       images?: Array<{ mimeType: string; data: string; uri?: string }>,
+      opts?: { timeoutMs?: number },
     ) => {
       if (!acp?.isRunning) {
         if (!workspacePath) {
@@ -514,7 +515,9 @@ function registerIpc(): void {
         for (const p of snapshotPaths) watchedPaths.add(p);
         await changes.captureBefore(snapshotPaths);
       }
-      const turn = await acp!.prompt(text, images, { timeoutMs: 180_000 });
+      const turn = await acp!.prompt(text, images, {
+        timeoutMs: opts?.timeoutMs ?? 180_000,
+      });
       // After turn, re-check watched paths
       for (const p of watchedPaths) {
         const change = await changes.captureAfter(p);

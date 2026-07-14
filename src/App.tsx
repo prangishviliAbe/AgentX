@@ -7,7 +7,11 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TitleBar } from "./components/TitleBar";
 import { fileName, languageFromPath } from "./lib/language";
-import { CONTINUE_PROMPT, looksLikeIncompletePlan } from "./lib/incomplete";
+import {
+  CONTINUE_PROMPT,
+  CONTINUE_PROMPT_NO_TOOLS,
+  shouldAutoContinue,
+} from "./lib/incomplete";
 import type {
   AgentStatus,
   AuthStatus,
@@ -62,6 +66,8 @@ export default function App() {
   /** Last ACP event timestamp — used to detect silent hangs while busy */
   const lastAcpAt = useRef<number>(Date.now());
   const [activityHint, setActivityHint] = useState<string | null>(null);
+  /** tools used in the current ACP turn */
+  const toolsThisTurn = useRef(0);
 
   const ensureAssistantFinal = useCallback((text: string) => {
     const finalText = text.trim();
@@ -280,6 +286,7 @@ export default function App() {
         }
 
         if (kind === "tool_call") {
+          toolsThisTurn.current += 1;
           if (streamingId.current) {
             const id = streamingId.current;
             streamingId.current = null;
@@ -555,10 +562,11 @@ export default function App() {
   const runAgentTurn = async (
     text: string,
     images: ChatImage[] = [],
-    opts?: { silentUser?: boolean },
-  ): Promise<string> => {
+    opts?: { silentUser?: boolean; timeoutMs?: number; noMoreTools?: boolean },
+  ): Promise<{ text: string; toolsRan: boolean }> => {
     streamingId.current = null;
     thoughtId.current = null;
+    toolsThisTurn.current = 0;
 
     if (!opts?.silentUser) {
       setMessages((prev) => [
@@ -580,7 +588,9 @@ export default function App() {
         {
           id: uid(),
           role: "system",
-          content: "გრძელდება… (auto-continue)",
+          content: autoContinue
+            ? "Auto-continue…"
+            : "Continuing…",
         },
       ]);
     }
@@ -591,19 +601,31 @@ export default function App() {
     setLiveThought("");
 
     try {
+      // Clear any stuck prior turn before starting
+      try {
+        await window.agentx.acpCancel();
+      } catch {
+        // ignore
+      }
+      await new Promise((r) => setTimeout(r, 80));
+
       const st = (await window.agentx.acpStatus()) as { running?: boolean };
       if (!st.running) {
         await startAgent();
       }
       const snapshotPaths = tabs.map((t) => t.path);
+      const promptText = opts?.noMoreTools
+        ? `${text}\n\n${CONTINUE_PROMPT_NO_TOOLS}`
+        : text;
       const result = (await window.agentx.acpPrompt(
-        text,
+        promptText,
         snapshotPaths,
         images.map((img) => ({
           mimeType: img.mimeType,
           data: img.data,
           uri: img.name ? `attachment://${img.name}` : undefined,
         })),
+        { timeoutMs: opts?.timeoutMs ?? 180_000 },
       )) as { assistantText?: string } | boolean;
 
       const finalText =
@@ -612,7 +634,7 @@ export default function App() {
           : "";
       ensureAssistantFinal(finalText);
       toolMsgIds.current.clear();
-      return finalText;
+      return { text: finalText, toolsRan: toolsThisTurn.current > 0 };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const cancelled = /cancel|timed out/i.test(message);
@@ -621,18 +643,15 @@ export default function App() {
         {
           id: uid(),
           role: "system",
-          content: cancelled
-            ? message
-            : message,
+          content: message,
         },
       ]);
-      // Keep agent "running" if process still alive; only unlock busy
       setAgent((a) => ({
         ...a,
         lastError: cancelled ? null : message,
         busy: false,
       }));
-      return "";
+      return { text: "", toolsRan: toolsThisTurn.current > 0 };
     } finally {
       if (streamingId.current) {
         const id = streamingId.current;
@@ -644,30 +663,34 @@ export default function App() {
       thoughtId.current = null;
       setAgent((a) => ({ ...a, busy: false }));
       setActivityHint(null);
-      // Keep last thought visible in history; clear live sticky stream
       setLiveThought("");
-      if (thoughtId.current) {
-        const tid = thoughtId.current;
-        thoughtId.current = null;
-        setMessages((prev) =>
-          prev.map((m) => (m.id === tid ? { ...m, streaming: false } : m)),
-        );
-      }
       if (workspace) void refreshTree(workspace);
       void refreshChanges();
     }
   };
 
   const sendPrompt = async (text: string, images: ChatImage[] = []) => {
-    // How many auto follow-ups when the model only posts a plan
-    autoContinueLeft.current = autoContinue
+    const maxSteps = autoContinue
       ? Math.min(5, Math.max(1, autoContinueMax))
       : 0;
-    let answer = await runAgentTurn(text, images);
+    autoContinueLeft.current = maxSteps;
 
-    while (autoContinue && autoContinueLeft.current > 0 && looksLikeIncompletePlan(answer)) {
+    let result = await runAgentTurn(text, images);
+    let step = 0;
+
+    while (
+      autoContinue &&
+      autoContinueLeft.current > 0 &&
+      shouldAutoContinue(result.text, { toolsRan: result.toolsRan })
+    ) {
       autoContinueLeft.current -= 1;
-      answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+      step += 1;
+      // Later continues: prefer answering without another long tool chain
+      result = await runAgentTurn(CONTINUE_PROMPT, [], {
+        silentUser: true,
+        timeoutMs: 90_000,
+        noMoreTools: step >= 2,
+      });
     }
   };
 
@@ -675,19 +698,29 @@ export default function App() {
     if (agent.busy) {
       await window.agentx.acpCancel();
       setAgent((a) => ({ ...a, busy: false }));
+      await new Promise((r) => setTimeout(r, 100));
     }
-    // Manual continue: allow up to configured max steps in a chain
-    autoContinueLeft.current = autoContinue
+    const maxSteps = autoContinue
       ? Math.min(5, Math.max(1, autoContinueMax))
       : 1;
-    let answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+    autoContinueLeft.current = maxSteps;
+    let result = await runAgentTurn(CONTINUE_PROMPT, [], {
+      silentUser: true,
+      timeoutMs: 90_000,
+    });
+    let step = 0;
     while (
       autoContinue &&
       autoContinueLeft.current > 0 &&
-      looksLikeIncompletePlan(answer)
+      shouldAutoContinue(result.text, { toolsRan: result.toolsRan })
     ) {
       autoContinueLeft.current -= 1;
-      answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+      step += 1;
+      result = await runAgentTurn(CONTINUE_PROMPT, [], {
+        silentUser: true,
+        timeoutMs: 90_000,
+        noMoreTools: step >= 1,
+      });
     }
   };
 
@@ -934,9 +967,15 @@ export default function App() {
           busy={agent.busy}
           disabledReason={disabledReason}
           canContinue={
+            !autoContinue &&
             !disabledReason &&
             messages.some((m) => m.role === "assistant" || m.role === "tool")
           }
+          autoContinue={autoContinue}
+          onToggleAutoContinue={(value) => {
+            setAutoContinue(value);
+            void window.agentx.setSettings({ autoContinue: value });
+          }}
           activityHint={activityHint}
           liveThought={showThinking ? liveThought : ""}
           showThinking={showThinking}
