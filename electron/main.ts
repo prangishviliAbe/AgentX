@@ -463,7 +463,7 @@ function registerIpc(): void {
         for (const p of snapshotPaths) watchedPaths.add(p);
         await changes.captureBefore(snapshotPaths);
       }
-      const turn = await acp!.prompt(text, images);
+      const turn = await acp!.prompt(text, images, { timeoutMs: 180_000 });
       // After turn, re-check watched paths
       for (const p of watchedPaths) {
         const change = await changes.captureAfter(p);
@@ -480,9 +480,15 @@ function registerIpc(): void {
         ok: true,
         assistantText: turn.assistantText,
         thoughtText: turn.thoughtText,
+        timedOut: turn.timedOut,
       };
     },
   );
+
+  ipcMain.handle("acp:cancel", async () => {
+    acp?.cancel();
+    return true;
+  });
 
   ipcMain.handle(
     "acp:permission-response",

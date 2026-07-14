@@ -212,12 +212,15 @@ export class GrokAcpClient extends EventEmitter {
   async prompt(
     text: string,
     images?: Array<{ mimeType: string; data: string; uri?: string }>,
-  ): Promise<{ assistantText: string; thoughtText: string }> {
+    options?: { timeoutMs?: number },
+  ): Promise<{ assistantText: string; thoughtText: string; timedOut?: boolean }> {
     if (!this.sessionId) throw new Error("ACP session not ready");
     const prompt = buildPromptBlocks(text, images);
+    const timeoutMs = options?.timeoutMs ?? 180_000;
 
     let assistantText = "";
     let thoughtText = "";
+    let timedOut = false;
     const onUpdate = (update: AcpUpdate | Record<string, unknown>) => {
       const u = update as AcpUpdate & Record<string, unknown>;
       const kind = String(u.sessionUpdate || "");
@@ -227,25 +230,60 @@ export class GrokAcpClient extends EventEmitter {
       if (kind === "agent_thought_chunk") thoughtText += chunk;
     };
     this.on("update", onUpdate);
+
+    const work = this.request("session/prompt", {
+      sessionId: this.sessionId,
+      prompt,
+    });
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
     try {
-      await this.request("session/prompt", {
-        sessionId: this.sessionId,
-        prompt,
-      });
+      await Promise.race([
+        work,
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => {
+            timedOut = true;
+            this.cancel();
+            reject(new Error(`Agent turn timed out after ${Math.round(timeoutMs / 1000)}s`));
+          }, timeoutMs);
+        }),
+      ]);
       // Grok sometimes flushes a few more chunks right after the RPC result
       await new Promise((r) => setTimeout(r, 150));
     } finally {
+      if (timer) clearTimeout(timer);
       this.off("update", onUpdate);
     }
 
     this.emit("turn-complete", {
       assistantText: assistantText.trim(),
       thoughtText: thoughtText.trim(),
+      timedOut,
     });
     return {
       assistantText: assistantText.trim(),
       thoughtText: thoughtText.trim(),
+      timedOut,
     };
+  }
+
+  /** Cancel in-flight turn so the UI can unlock. */
+  cancel(): void {
+    if (!this.sessionId || !this.proc) return;
+    try {
+      this.write({
+        jsonrpc: "2.0",
+        method: "session/cancel",
+        params: { sessionId: this.sessionId },
+      });
+    } catch {
+      // ignore
+    }
+    // Unblock any hanging prompt promise
+    for (const [id, p] of this.pending) {
+      p.reject(new Error("Cancelled"));
+      this.pending.delete(id);
+    }
   }
 
   async respondPermission(

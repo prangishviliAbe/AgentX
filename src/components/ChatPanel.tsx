@@ -7,6 +7,7 @@ type Props = {
   disabledReason: string | null;
   canContinue?: boolean;
   onContinue?: () => void;
+  onStop?: () => void;
   onSend: (text: string, images: ChatImage[]) => void;
   onClear: () => void;
   onPickImages: () => Promise<ChatImage[]>;
@@ -44,6 +45,7 @@ export function ChatPanel({
   disabledReason,
   canContinue,
   onContinue,
+  onStop,
   onSend,
   onClear,
   onPickImages,
@@ -75,12 +77,19 @@ export function ChatPanel({
 
   const submit = () => {
     const text = draft.trim();
-    if (busy || disabledReason) return;
+    if (disabledReason) return;
     if (!text && attachments.length === 0) return;
-    onSend(text, attachments);
+    const payload = { text, images: attachments };
     setDraft("");
     setAttachments([]);
     setAttachError(null);
+    // If a turn is stuck "busy", unlock then send
+    if (busy && onStop) {
+      onStop();
+      window.setTimeout(() => onSend(payload.text, payload.images), 120);
+      return;
+    }
+    onSend(payload.text, payload.images);
   };
 
   return (
@@ -93,12 +102,26 @@ export function ChatPanel({
           ) : null}
         </span>
         <div className="chat-header-actions">
-          {canContinue && onContinue && !busy && (
+          {busy && onStop && (
+            <button
+              type="button"
+              className="btn"
+              title="Stop stuck turn and unlock chat"
+              onClick={onStop}
+            >
+              Stop
+            </button>
+          )}
+          {canContinue && onContinue && (
             <button
               type="button"
               className="btn btn-primary"
               title="Force agent to continue"
-              onClick={onContinue}
+              onClick={() => {
+                if (busy && onStop) onStop();
+                // slight delay so cancel lands before new prompt
+                window.setTimeout(() => onContinue(), busy ? 80 : 0);
+              }}
             >
               Continue
             </button>
@@ -140,6 +163,12 @@ export function ChatPanel({
             {m.content || (m.streaming ? "…" : "")}
           </div>
         ))}
+        {busy && (
+          <div className="msg system busy-banner">
+            მუშაობს… თუ გაიჭედა, დააჭირე <strong>Stop</strong>, შემდეგ{" "}
+            <strong>Continue</strong> ან ახალი შეტყობინება.
+          </div>
+        )}
         <div ref={bottomRef} />
       </div>
 
@@ -164,7 +193,9 @@ export function ChatPanel({
                   className="attach-remove"
                   title="Remove"
                   onClick={() =>
-                    setAttachments((prev) => prev.filter((a) => a.id !== img.id))
+                    setAttachments((prev) =>
+                      prev.filter((a) => a.id !== img.id),
+                    )
                   }
                 >
                   ×
@@ -175,7 +206,11 @@ export function ChatPanel({
         )}
         <textarea
           value={draft}
-          placeholder="Message Grok… Paste screenshot (Ctrl+V), attach image, Enter to send"
+          placeholder={
+            busy
+              ? "შეგიძლია აკრიფო — Send/Stop განბლოკავს გაჭედილ turn-ს…"
+              : "Message Grok… Paste screenshot (Ctrl+V), attach image, Enter to send"
+          }
           disabled={Boolean(disabledReason)}
           onChange={(e) => setDraft(e.target.value)}
           onPaste={(e) => {
@@ -216,7 +251,7 @@ export function ChatPanel({
             <button
               type="button"
               className="btn"
-              disabled={Boolean(disabledReason) || busy}
+              disabled={Boolean(disabledReason)}
               title="Attach images"
               onClick={() => {
                 void (async () => {
@@ -229,7 +264,7 @@ export function ChatPanel({
                       return;
                     }
                   } catch {
-                    // fall through to HTML file picker
+                    // fall through
                   }
                   fileInputRef.current?.click();
                 })();
@@ -239,26 +274,35 @@ export function ChatPanel({
             </button>
             <span className="composer-hint">
               {busy
-                ? "Grok is working — wait for tools & final answer…"
+                ? "Working… use Stop if stuck"
                 : attachments.length
                   ? `${attachments.length} image(s) · paste OK`
                   : canContinue
-                    ? "Done for now — press Continue if the answer is incomplete"
+                    ? "Press Continue if the answer is incomplete"
                     : "Paste or attach screenshots"}
             </span>
           </div>
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={
-              busy ||
-              Boolean(disabledReason) ||
-              (!draft.trim() && attachments.length === 0)
-            }
-            onClick={submit}
-          >
-            Send
-          </button>
+          {busy ? (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => onStop?.()}
+            >
+              Stop
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={
+                Boolean(disabledReason) ||
+                (!draft.trim() && attachments.length === 0)
+              }
+              onClick={submit}
+            >
+              Send
+            </button>
+          )}
         </div>
       </div>
     </aside>

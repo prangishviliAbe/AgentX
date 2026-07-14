@@ -936,3 +936,9 @@ button:disabled {
   font-weight: 500;
   animation: pulse 1s ease-in-out infinite;
 }
+
+.busy-banner {
+  border-style: solid !important;
+  border-color: #0a84d0 !important;
+  color: #b8d4ea !important;
+}

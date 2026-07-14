@@ -48,6 +48,7 @@ const api = {
 
   acpStart: (cwd?: string) => ipcRenderer.invoke("acp:start", cwd),
   acpStop: () => ipcRenderer.invoke("acp:stop"),
+  acpCancel: () => ipcRenderer.invoke("acp:cancel"),
   acpPrompt: (
     text: string,
     snapshotPaths?: string[],

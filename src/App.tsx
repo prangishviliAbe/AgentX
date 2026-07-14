@@ -508,11 +508,23 @@ export default function App() {
       return finalText;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
+      const cancelled = /cancel|timed out/i.test(message);
       setMessages((prev) => [
         ...prev,
-        { id: uid(), role: "system", content: message },
+        {
+          id: uid(),
+          role: "system",
+          content: cancelled
+            ? message
+            : message,
+        },
       ]);
-      setAgent((a) => ({ ...a, lastError: message, running: false }));
+      // Keep agent "running" if process still alive; only unlock busy
+      setAgent((a) => ({
+        ...a,
+        lastError: cancelled ? null : message,
+        busy: false,
+      }));
       return "";
     } finally {
       if (streamingId.current) {
@@ -530,22 +542,46 @@ export default function App() {
   };
 
   const sendPrompt = async (text: string, images: ChatImage[] = []) => {
-    // Allow up to 2 automatic continuations when the model only posts a plan
-    autoContinueLeft.current = 2;
+    // One automatic continuation max (more caused hung busy state)
+    autoContinueLeft.current = 1;
     let answer = await runAgentTurn(text, images);
 
-    while (
+    if (
       autoContinueLeft.current > 0 &&
       looksLikeIncompletePlan(answer)
     ) {
-      autoContinueLeft.current -= 1;
+      autoContinueLeft.current = 0;
       answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
     }
   };
 
   const continueAgent = async () => {
+    if (agent.busy) {
+      await window.agentx.acpCancel();
+      setAgent((a) => ({ ...a, busy: false }));
+    }
     autoContinueLeft.current = 1;
     await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+  };
+
+  const stopAgent = async () => {
+    autoContinueLeft.current = 0;
+    try {
+      await window.agentx.acpCancel();
+    } catch {
+      // ignore
+    }
+    setAgent((a) => ({ ...a, busy: false }));
+    streamingId.current = null;
+    thoughtId.current = null;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: uid(),
+        role: "system",
+        content: "გაჩერებულია. ახლა შეგიძლია ახალი შეტყობინება ან Continue.",
+      },
+    ]);
   };
 
   const respondPermission = async (decision: "allow" | "deny") => {
@@ -751,11 +787,11 @@ export default function App() {
           busy={agent.busy}
           disabledReason={disabledReason}
           canContinue={
-            !agent.busy &&
             !disabledReason &&
             messages.some((m) => m.role === "assistant")
           }
           onContinue={() => void continueAgent()}
+          onStop={() => void stopAgent()}
           onSend={(text, images) => void sendPrompt(text, images)}
           onPickImages={async () => {
             const picked = (await window.agentx.openImages()) as Array<{
@@ -773,6 +809,7 @@ export default function App() {
             }));
           }}
           onClear={() => {
+            void stopAgent();
             streamingId.current = null;
             thoughtId.current = null;
             toolMsgIds.current.clear();
