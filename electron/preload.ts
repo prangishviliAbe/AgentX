@@ -13,12 +13,22 @@ export type AuthStatus = {
   hasApiKey: boolean;
 };
 
+export type AppSettings = {
+  alwaysApprove: boolean;
+  autoContinue: boolean;
+  autoContinueMax: number;
+  settingsPath?: string;
+};
+
 export type AppInfo = {
   version: string;
   platform: string;
   grokBinary: string;
   auth: AuthStatus;
   alwaysApprove?: boolean;
+  autoContinue?: boolean;
+  autoContinueMax?: number;
+  settingsPath?: string;
 };
 
 const api = {
@@ -27,8 +37,9 @@ const api = {
   login: (): Promise<{ ok: boolean; message: string }> =>
     ipcRenderer.invoke("auth:login"),
 
-  getSettings: (): Promise<{ alwaysApprove: boolean }> =>
-    ipcRenderer.invoke("settings:get"),
+  getSettings: (): Promise<AppSettings> => ipcRenderer.invoke("settings:get"),
+  setSettings: (partial: Partial<AppSettings>) =>
+    ipcRenderer.invoke("settings:set", partial),
   setAlwaysApprove: (value: boolean) =>
     ipcRenderer.invoke("settings:set-always-approve", value),
 

@@ -278,7 +278,7 @@ export function ChatPanel({
                 : attachments.length
                   ? `${attachments.length} image(s) · paste OK`
                   : canContinue
-                    ? "Press Continue if the answer is incomplete"
+                    ? "Auto-continue off — press Continue if incomplete"
                     : "Paste or attach screenshots"}
             </span>
           </div>

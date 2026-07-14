@@ -103,8 +103,11 @@ Artifacts:
 | Apply agent edits | **Changes** → Apply / Reject (or Apply all) |
 | Login | Settings → **Login with Grok** |
 | Paste screenshot | Focus chat → **Ctrl+V** (or **Attach**) |
+| Auto-continue | Settings → **ავტომატურად გააგრძელე** (default on) |
 
 AgentX reuses credentials from `~/.grok/auth.json` (same as CLI). Set `GROK_BIN` if `grok` is not on `PATH`.
+
+Preferences (auto-approve, auto-continue) are saved in `~/.agentx/settings.json`.
 
 Workspace files (e.g. `package.json`) are served to Grok over ACP `fs/read_text_file` so the agent sees the open project correctly.
 

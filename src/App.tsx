@@ -34,6 +34,8 @@ export default function App() {
   const [auth, setAuth] = useState<AuthStatus | null>(null);
   const [grokBinary, setGrokBinary] = useState("");
   const [alwaysApprove, setAlwaysApprove] = useState(true);
+  const [autoContinue, setAutoContinue] = useState(true);
+  const [autoContinueMax, setAutoContinueMax] = useState(3);
   const [permission, setPermission] = useState<PermissionRequest | null>(null);
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -132,8 +134,16 @@ export default function App() {
     if (typeof info.alwaysApprove === "boolean") {
       setAlwaysApprove(info.alwaysApprove);
     }
+    if (typeof info.autoContinue === "boolean") {
+      setAutoContinue(info.autoContinue);
+    }
+    if (typeof info.autoContinueMax === "number") {
+      setAutoContinueMax(info.autoContinueMax);
+    }
     const settings = await window.agentx.getSettings();
     setAlwaysApprove(settings.alwaysApprove);
+    setAutoContinue(settings.autoContinue);
+    setAutoContinueMax(settings.autoContinueMax);
 
     const ws = await window.agentx.getWorkspace();
     if (ws) {
@@ -542,15 +552,14 @@ export default function App() {
   };
 
   const sendPrompt = async (text: string, images: ChatImage[] = []) => {
-    // One automatic continuation max (more caused hung busy state)
-    autoContinueLeft.current = 1;
+    // How many auto follow-ups when the model only posts a plan
+    autoContinueLeft.current = autoContinue
+      ? Math.min(5, Math.max(1, autoContinueMax))
+      : 0;
     let answer = await runAgentTurn(text, images);
 
-    if (
-      autoContinueLeft.current > 0 &&
-      looksLikeIncompletePlan(answer)
-    ) {
-      autoContinueLeft.current = 0;
+    while (autoContinue && autoContinueLeft.current > 0 && looksLikeIncompletePlan(answer)) {
+      autoContinueLeft.current -= 1;
       answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
     }
   };
@@ -560,8 +569,19 @@ export default function App() {
       await window.agentx.acpCancel();
       setAgent((a) => ({ ...a, busy: false }));
     }
-    autoContinueLeft.current = 1;
-    await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+    // Manual continue: allow up to configured max steps in a chain
+    autoContinueLeft.current = autoContinue
+      ? Math.min(5, Math.max(1, autoContinueMax))
+      : 1;
+    let answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+    while (
+      autoContinue &&
+      autoContinueLeft.current > 0 &&
+      looksLikeIncompletePlan(answer)
+    ) {
+      autoContinueLeft.current -= 1;
+      answer = await runAgentTurn(CONTINUE_PROMPT, [], { silentUser: true });
+    }
   };
 
   const stopAgent = async () => {
@@ -698,6 +718,8 @@ export default function App() {
           auth={auth}
           grokBinary={grokBinary}
           alwaysApprove={alwaysApprove}
+          autoContinue={autoContinue}
+          autoContinueMax={autoContinueMax}
           diffs={diffs}
           selectedDiffPath={selectedDiffPath}
           termOutput={termOutput}
@@ -722,6 +744,14 @@ export default function App() {
           onToggleAlwaysApprove={(value) => {
             setAlwaysApprove(value);
             void window.agentx.setAlwaysApprove(value);
+          }}
+          onToggleAutoContinue={(value) => {
+            setAutoContinue(value);
+            void window.agentx.setSettings({ autoContinue: value });
+          }}
+          onChangeAutoContinueMax={(value) => {
+            setAutoContinueMax(value);
+            void window.agentx.setSettings({ autoContinueMax: value });
           }}
           onSelectDiff={setSelectedDiffPath}
           onApplyDiff={(p) => void applyDiff(p)}
@@ -787,6 +817,7 @@ export default function App() {
           busy={agent.busy}
           disabledReason={disabledReason}
           canContinue={
+            !autoContinue &&
             !disabledReason &&
             messages.some((m) => m.role === "assistant")
           }

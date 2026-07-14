@@ -11,6 +11,8 @@ type Props = {
   auth: AuthStatus | null;
   grokBinary: string;
   alwaysApprove: boolean;
+  autoContinue: boolean;
+  autoContinueMax: number;
   diffs: FileDiff[];
   selectedDiffPath: string | null;
   termOutput: string;
@@ -22,6 +24,8 @@ type Props = {
   onRefreshAuth: () => void;
   onStartAgent: () => void;
   onToggleAlwaysApprove: (value: boolean) => void;
+  onToggleAutoContinue: (value: boolean) => void;
+  onChangeAutoContinueMax: (value: number) => void;
   onSelectDiff: (path: string) => void;
   onApplyDiff: (path: string) => void;
   onRejectDiff: (path: string) => void;
@@ -40,6 +44,8 @@ export function Sidebar({
   auth,
   grokBinary,
   alwaysApprove,
+  autoContinue,
+  autoContinueMax,
   diffs,
   selectedDiffPath,
   termOutput,
@@ -51,6 +57,8 @@ export function Sidebar({
   onRefreshAuth,
   onStartAgent,
   onToggleAlwaysApprove,
+  onToggleAutoContinue,
+  onChangeAutoContinueMax,
   onSelectDiff,
   onApplyDiff,
   onRejectDiff,
@@ -177,6 +185,46 @@ export function Sidebar({
               <p className="hint">
                 Off = interactive Allow/Deny modal when Grok wants to run a tool.
               </p>
+            </div>
+
+            <div className="settings-row">
+              <label>Agent auto-continue</label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={autoContinue}
+                  onChange={(e) => onToggleAutoContinue(e.target.checked)}
+                />
+                <span>ავტომატურად გააგრძელე (Continue აღარ გჭირდება)</span>
+              </label>
+              <p className="hint">
+                ჩართულია: თუ Grok მხოლოდ „გეგმას“ წერს და ჩერდება, AgentX თავად
+                აგრძელებს სრულ პასუხამდე. გამორთულია: მხოლოდ ხელით Continue.
+              </p>
+              {autoContinue && (
+                <label className="toggle-row" style={{ marginTop: 8 }}>
+                  <span style={{ minWidth: 90 }}>Max steps</span>
+                  <select
+                    value={autoContinueMax}
+                    onChange={(e) =>
+                      onChangeAutoContinueMax(Number(e.target.value))
+                    }
+                    style={{
+                      background: "var(--bg-input)",
+                      border: "1px solid var(--border-strong)",
+                      color: "var(--text)",
+                      borderRadius: 4,
+                      padding: "4px 8px",
+                    }}
+                  >
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
 
             <div className="settings-row">

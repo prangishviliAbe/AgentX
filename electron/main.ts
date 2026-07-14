@@ -26,6 +26,12 @@ import {
 import { WorkspaceChangeService } from "./fs/snapshots";
 import { buildFileDiff } from "./fs/diff";
 import { LocalShell } from "./terminal/shell";
+import {
+  loadSettings,
+  saveSettings,
+  getSettingsPath,
+  type AppSettings,
+} from "./settings/store";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -48,7 +54,8 @@ process.on("unhandledRejection", (reason) => {
 let mainWindow: BrowserWindow | null = null;
 let acp: GrokAcpClient | null = null;
 let workspacePath: string | null = null;
-let alwaysApprove = true;
+let appSettings: AppSettings = loadSettings();
+let alwaysApprove = appSettings.alwaysApprove;
 const changes = new WorkspaceChangeService();
 let shellSession: LocalShell | null = null;
 const watchedPaths = new Set<string>();
@@ -259,6 +266,9 @@ function registerIpc(): void {
     grokBinary: getGrokBinaryPath(),
     auth: checkAuthStatus(),
     alwaysApprove,
+    autoContinue: appSettings.autoContinue,
+    autoContinueMax: appSettings.autoContinueMax,
+    settingsPath: getSettingsPath(),
   }));
 
   ipcMain.handle("auth:status", async () => checkAuthStatus());
@@ -343,13 +353,45 @@ function registerIpc(): void {
     });
   });
 
-  ipcMain.handle("settings:get", async () => ({ alwaysApprove }));
+  ipcMain.handle("settings:get", async () => ({
+    alwaysApprove: appSettings.alwaysApprove,
+    autoContinue: appSettings.autoContinue,
+    autoContinueMax: appSettings.autoContinueMax,
+    settingsPath: getSettingsPath(),
+  }));
+
+  ipcMain.handle("settings:set", async (_e, partial: Partial<AppSettings>) => {
+    const prevApprove = alwaysApprove;
+    appSettings = saveSettings(partial);
+    alwaysApprove = appSettings.alwaysApprove;
+    acp?.setAlwaysApprove(alwaysApprove);
+
+    // CLI --always-approve is only applied at process start — restart agent
+    if (
+      typeof partial.alwaysApprove === "boolean" &&
+      partial.alwaysApprove !== prevApprove &&
+      acp?.isRunning &&
+      workspacePath
+    ) {
+      try {
+        acp.stop();
+        acp = null;
+        await ensureAcp(workspacePath);
+      } catch (err) {
+        send("acp:error", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+    return appSettings;
+  });
+
   ipcMain.handle("settings:set-always-approve", async (_e, value: boolean) => {
-    const next = Boolean(value);
+    appSettings = saveSettings({ alwaysApprove: Boolean(value) });
+    const next = appSettings.alwaysApprove;
     const changed = next !== alwaysApprove;
     alwaysApprove = next;
     acp?.setAlwaysApprove(alwaysApprove);
-    // CLI --always-approve is only applied at process start — restart agent
     if (changed && acp?.isRunning && workspacePath) {
       try {
         acp.stop();
@@ -361,7 +403,7 @@ function registerIpc(): void {
         });
       }
     }
-    return { alwaysApprove };
+    return appSettings;
   });
 
   ipcMain.handle("workspace:open", async () => {
