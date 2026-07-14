@@ -97,13 +97,19 @@ export class GrokAcpClient extends EventEmitter {
   private sessionId: string | null = null;
   private cwd: string;
   private alwaysApprove: boolean;
+  private planFirst: boolean;
   private started = false;
   private handlers = new AcpClientHandlers();
 
-  constructor(options: { cwd: string; alwaysApprove?: boolean }) {
+  constructor(options: {
+    cwd: string;
+    alwaysApprove?: boolean;
+    planFirst?: boolean;
+  }) {
     super();
     this.cwd = options.cwd;
     this.alwaysApprove = options.alwaysApprove ?? true;
+    this.planFirst = options.planFirst ?? true;
   }
 
   get activeSessionId(): string | null {
@@ -120,6 +126,27 @@ export class GrokAcpClient extends EventEmitter {
 
   setAlwaysApprove(value: boolean): void {
     this.alwaysApprove = value;
+  }
+
+  setPlanFirst(value: boolean): void {
+    this.planFirst = value;
+  }
+
+  private sessionRules(): string {
+    const base = [
+      "Be concise and practical.",
+      "When streaming is available, include brief reasoning steps (thinking) before tool use and final answers.",
+    ];
+    if (this.planFirst) {
+      base.push(
+        "PLAN-FIRST MODE (required): For non-trivial create/build/implement/redesign requests (apps, games, features, multi-file work):",
+        "1) First reply with a short plan only: goal, main files, 3–6 steps, risks.",
+        "2) Explicitly ask the user to confirm before writing/editing files or running destructive commands.",
+        "3) Do NOT create, edit, or delete project files until the user confirms (yes / ok / continue / გააგრძელე / დაიწყე / კი).",
+        "4) Simple Q&A, explanations, reviews, and read-only inspection may proceed without waiting.",
+      );
+    }
+    return base.join("\n");
   }
 
   async start(): Promise<void> {
@@ -178,6 +205,7 @@ export class GrokAcpClient extends EventEmitter {
     const session = (await this.request("session/new", {
       cwd: this.cwd,
       mcpServers: [],
+      _meta: { rules: this.sessionRules() },
     })) as { sessionId?: string };
 
     if (!session?.sessionId) {
@@ -195,6 +223,7 @@ export class GrokAcpClient extends EventEmitter {
     const session = (await this.request("session/new", {
       cwd: this.cwd,
       mcpServers: [],
+      _meta: { rules: this.sessionRules() },
     })) as { sessionId?: string };
 
     if (!session?.sessionId) {

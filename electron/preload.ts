@@ -17,6 +17,8 @@ export type AppSettings = {
   alwaysApprove: boolean;
   autoContinue: boolean;
   autoContinueMax: number;
+  planFirst: boolean;
+  showThinking: boolean;
   settingsPath?: string;
 };
 

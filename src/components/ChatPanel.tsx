@@ -7,6 +7,8 @@ type Props = {
   disabledReason: string | null;
   canContinue?: boolean;
   activityHint?: string | null;
+  liveThought?: string;
+  showThinking?: boolean;
   onContinue?: () => void;
   onStop?: () => void;
   onSend: (text: string, images: ChatImage[]) => void;
@@ -46,6 +48,8 @@ export function ChatPanel({
   disabledReason,
   canContinue,
   activityHint,
+  liveThought,
+  showThinking = true,
   onContinue,
   onStop,
   onSend,
@@ -142,33 +146,42 @@ export function ChatPanel({
             <code>grok agent</code>.
           </div>
         )}
-        {messages.map((m) => (
-          <div key={m.id} className={`msg ${m.role}`}>
-            <div className="msg-role">
-              {m.role === "thought"
-                ? "thinking"
-                : m.role === "assistant"
-                  ? "assistant"
-                  : m.role}
-              {m.streaming ? " · live" : ""}
-              {m.meta ? ` · ${m.meta}` : ""}
-            </div>
-            {m.images && m.images.length > 0 && (
-              <div className="msg-images">
-                {m.images.map((img) => (
-                  <img
-                    key={img.id}
-                    src={img.previewUrl}
-                    alt={img.name}
-                    title={img.name}
-                    className="msg-thumb"
-                  />
-                ))}
+        {messages.map((m) => {
+          if (m.role === "thought" && !showThinking) return null;
+          return (
+            <div key={m.id} className={`msg ${m.role}`}>
+              <div className="msg-role">
+                {m.role === "thought"
+                  ? "thinking"
+                  : m.role === "assistant"
+                    ? "assistant"
+                    : m.role}
+                {m.streaming ? " · live" : ""}
+                {m.meta ? ` · ${m.meta}` : ""}
               </div>
-            )}
-            {m.content || (m.streaming ? "…" : "")}
+              {m.images && m.images.length > 0 && (
+                <div className="msg-images">
+                  {m.images.map((img) => (
+                    <img
+                      key={img.id}
+                      src={img.previewUrl}
+                      alt={img.name}
+                      title={img.name}
+                      className="msg-thumb"
+                    />
+                  ))}
+                </div>
+              )}
+              {m.content || (m.streaming ? "…" : "")}
+            </div>
+          );
+        })}
+        {showThinking && liveThought && (
+          <div className="live-thought-panel">
+            <div className="live-thought-title">Thinking (live)</div>
+            <div className="live-thought-body">{liveThought}</div>
           </div>
-        ))}
+        )}
         {busy && (
           <div className="msg system busy-banner">
             <div>

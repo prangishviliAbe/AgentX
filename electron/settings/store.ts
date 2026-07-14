@@ -8,12 +8,21 @@ export type AppSettings = {
   autoContinue: boolean;
   /** Max automatic follow-up turns (1–5). Only used when autoContinue is true. */
   autoContinueMax: number;
+  /**
+   * When true, session rules require a short plan + user confirmation
+   * before creating/editing files for non-trivial build requests.
+   */
+  planFirst: boolean;
+  /** Show live agent thinking stream in the chat UI. */
+  showThinking: boolean;
 };
 
 const DEFAULTS: AppSettings = {
   alwaysApprove: true,
   autoContinue: true,
   autoContinueMax: 3,
+  planFirst: true,
+  showThinking: true,
 };
 
 function settingsPath(): string {
@@ -35,6 +44,12 @@ export function loadSettings(): AppSettings {
           ? raw.autoContinue
           : DEFAULTS.autoContinue,
       autoContinueMax: clampMax(raw.autoContinueMax),
+      planFirst:
+        typeof raw.planFirst === "boolean" ? raw.planFirst : DEFAULTS.planFirst,
+      showThinking:
+        typeof raw.showThinking === "boolean"
+          ? raw.showThinking
+          : DEFAULTS.showThinking,
     };
   } catch {
     return { ...DEFAULTS };

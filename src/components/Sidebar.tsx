@@ -13,6 +13,8 @@ type Props = {
   alwaysApprove: boolean;
   autoContinue: boolean;
   autoContinueMax: number;
+  planFirst: boolean;
+  showThinking: boolean;
   diffs: FileDiff[];
   selectedDiffPath: string | null;
   termOutput: string;
@@ -26,6 +28,8 @@ type Props = {
   onToggleAlwaysApprove: (value: boolean) => void;
   onToggleAutoContinue: (value: boolean) => void;
   onChangeAutoContinueMax: (value: number) => void;
+  onTogglePlanFirst: (value: boolean) => void;
+  onToggleShowThinking: (value: boolean) => void;
   onSelectDiff: (path: string) => void;
   onApplyDiff: (path: string) => void;
   onRejectDiff: (path: string) => void;
@@ -46,6 +50,8 @@ export function Sidebar({
   alwaysApprove,
   autoContinue,
   autoContinueMax,
+  planFirst,
+  showThinking,
   diffs,
   selectedDiffPath,
   termOutput,
@@ -59,6 +65,8 @@ export function Sidebar({
   onToggleAlwaysApprove,
   onToggleAutoContinue,
   onChangeAutoContinueMax,
+  onTogglePlanFirst,
+  onToggleShowThinking,
   onSelectDiff,
   onApplyDiff,
   onRejectDiff,
@@ -188,6 +196,37 @@ export function Sidebar({
             </div>
 
             <div className="settings-row">
+              <label>Plan first</label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={planFirst}
+                  onChange={(e) => onTogglePlanFirst(e.target.checked)}
+                />
+                <span>Plan before building (confirm first)</span>
+              </label>
+              <p className="hint">
+                On: for create/build/game requests, Grok must propose a plan and
+                wait for your OK before writing files. Restarts the agent session.
+              </p>
+            </div>
+
+            <div className="settings-row">
+              <label>Thinking</label>
+              <label className="toggle-row">
+                <input
+                  type="checkbox"
+                  checked={showThinking}
+                  onChange={(e) => onToggleShowThinking(e.target.checked)}
+                />
+                <span>Show thinking process</span>
+              </label>
+              <p className="hint">
+                Live thought stream panel + thinking messages in chat.
+              </p>
+            </div>
+
+            <div className="settings-row">
               <label>Agent auto-continue</label>
               <label className="toggle-row">
                 <input
@@ -198,8 +237,8 @@ export function Sidebar({
                 <span>Auto-continue (no need for Continue)</span>
               </label>
               <p className="hint">
-                On: if Grok only posts a plan and stops, AgentX auto-continues
-                until a full answer. Off: manual Continue only.
+                On: if Grok only posts a short plan and stops, AgentX continues
+                automatically. Off: manual Continue only.
               </p>
               {autoContinue && (
                 <label className="toggle-row" style={{ marginTop: 8 }}>

@@ -237,7 +237,11 @@ async function ensureAcp(cwd: string): Promise<GrokAcpClient> {
 
   acp?.stop();
   workspacePath = cwd;
-  acp = new GrokAcpClient({ cwd, alwaysApprove });
+  acp = new GrokAcpClient({
+    cwd,
+    alwaysApprove,
+    planFirst: appSettings.planFirst,
+  });
   bindAcp(acp);
   await acp.start();
   return acp;
@@ -268,6 +272,8 @@ function registerIpc(): void {
     alwaysApprove,
     autoContinue: appSettings.autoContinue,
     autoContinueMax: appSettings.autoContinueMax,
+    planFirst: appSettings.planFirst,
+    showThinking: appSettings.showThinking,
     settingsPath: getSettingsPath(),
   }));
 
@@ -357,6 +363,8 @@ function registerIpc(): void {
     alwaysApprove: appSettings.alwaysApprove,
     autoContinue: appSettings.autoContinue,
     autoContinueMax: appSettings.autoContinueMax,
+    planFirst: appSettings.planFirst,
+    showThinking: appSettings.showThinking,
     settingsPath: getSettingsPath(),
   }));
 
@@ -365,14 +373,15 @@ function registerIpc(): void {
     appSettings = saveSettings(partial);
     alwaysApprove = appSettings.alwaysApprove;
     acp?.setAlwaysApprove(alwaysApprove);
+    acp?.setPlanFirst(appSettings.planFirst);
 
-    // CLI --always-approve is only applied at process start — restart agent
-    if (
-      typeof partial.alwaysApprove === "boolean" &&
-      partial.alwaysApprove !== prevApprove &&
-      acp?.isRunning &&
-      workspacePath
-    ) {
+    // Restart agent when flags that affect process/session rules change
+    const needsRestart =
+      (typeof partial.alwaysApprove === "boolean" &&
+        partial.alwaysApprove !== prevApprove) ||
+      typeof partial.planFirst === "boolean";
+
+    if (needsRestart && acp?.isRunning && workspacePath) {
       try {
         acp.stop();
         acp = null;

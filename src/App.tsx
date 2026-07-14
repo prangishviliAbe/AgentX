@@ -36,6 +36,9 @@ export default function App() {
   const [alwaysApprove, setAlwaysApprove] = useState(true);
   const [autoContinue, setAutoContinue] = useState(true);
   const [autoContinueMax, setAutoContinueMax] = useState(3);
+  const [planFirst, setPlanFirst] = useState(true);
+  const [showThinking, setShowThinking] = useState(true);
+  const [liveThought, setLiveThought] = useState("");
   const [permission, setPermission] = useState<PermissionRequest | null>(null);
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
@@ -147,6 +150,8 @@ export default function App() {
     setAlwaysApprove(settings.alwaysApprove);
     setAutoContinue(settings.autoContinue);
     setAutoContinueMax(settings.autoContinueMax);
+    setPlanFirst(settings.planFirst ?? true);
+    setShowThinking(settings.showThinking ?? true);
 
     const ws = await window.agentx.getWorkspace();
     if (ws) {
@@ -248,6 +253,8 @@ export default function App() {
         if (kind === "agent_thought_chunk") {
           if (!chunk) return;
           setActivityHint("Thinking…");
+          setLiveThought((prev) => (prev + chunk).slice(-4000));
+          // Always keep a durable thought message in history when enabled
           setMessages((prev) => {
             const id = thoughtId.current;
             if (id) {
@@ -581,6 +588,7 @@ export default function App() {
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
     lastAcpAt.current = Date.now();
     setActivityHint("Starting turn…");
+    setLiveThought("");
 
     try {
       const st = (await window.agentx.acpStatus()) as { running?: boolean };
@@ -636,6 +644,15 @@ export default function App() {
       thoughtId.current = null;
       setAgent((a) => ({ ...a, busy: false }));
       setActivityHint(null);
+      // Keep last thought visible in history; clear live sticky stream
+      setLiveThought("");
+      if (thoughtId.current) {
+        const tid = thoughtId.current;
+        thoughtId.current = null;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tid ? { ...m, streaming: false } : m)),
+        );
+      }
       if (workspace) void refreshTree(workspace);
       void refreshChanges();
     }
@@ -810,6 +827,8 @@ export default function App() {
           alwaysApprove={alwaysApprove}
           autoContinue={autoContinue}
           autoContinueMax={autoContinueMax}
+          planFirst={planFirst}
+          showThinking={showThinking}
           diffs={diffs}
           selectedDiffPath={selectedDiffPath}
           termOutput={termOutput}
@@ -842,6 +861,14 @@ export default function App() {
           onChangeAutoContinueMax={(value) => {
             setAutoContinueMax(value);
             void window.agentx.setSettings({ autoContinueMax: value });
+          }}
+          onTogglePlanFirst={(value) => {
+            setPlanFirst(value);
+            void window.agentx.setSettings({ planFirst: value });
+          }}
+          onToggleShowThinking={(value) => {
+            setShowThinking(value);
+            void window.agentx.setSettings({ showThinking: value });
           }}
           onSelectDiff={setSelectedDiffPath}
           onApplyDiff={(p) => void applyDiff(p)}
@@ -911,6 +938,8 @@ export default function App() {
             messages.some((m) => m.role === "assistant" || m.role === "tool")
           }
           activityHint={activityHint}
+          liveThought={showThinking ? liveThought : ""}
+          showThinking={showThinking}
           onContinue={() => void continueAgent()}
           onStop={() => void stopAgent()}
           onSend={(text, images) => void sendPrompt(text, images)}
