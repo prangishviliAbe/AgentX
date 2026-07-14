@@ -218,9 +218,10 @@ export class GrokAcpClient extends EventEmitter {
 
     let assistantText = "";
     let thoughtText = "";
-    const onUpdate = (update: AcpUpdate) => {
-      const kind = update.sessionUpdate;
-      const chunk = extractUpdateText(update);
+    const onUpdate = (update: AcpUpdate | Record<string, unknown>) => {
+      const u = update as AcpUpdate & Record<string, unknown>;
+      const kind = String(u.sessionUpdate || "");
+      const chunk = extractUpdateText(u);
       if (!chunk) return;
       if (kind === "agent_message_chunk") assistantText += chunk;
       if (kind === "agent_thought_chunk") thoughtText += chunk;
@@ -231,12 +232,20 @@ export class GrokAcpClient extends EventEmitter {
         sessionId: this.sessionId,
         prompt,
       });
+      // Grok sometimes flushes a few more chunks right after the RPC result
+      await new Promise((r) => setTimeout(r, 150));
     } finally {
       this.off("update", onUpdate);
     }
 
-    this.emit("turn-complete", { assistantText, thoughtText });
-    return { assistantText, thoughtText };
+    this.emit("turn-complete", {
+      assistantText: assistantText.trim(),
+      thoughtText: thoughtText.trim(),
+    });
+    return {
+      assistantText: assistantText.trim(),
+      thoughtText: thoughtText.trim(),
+    };
   }
 
   async respondPermission(

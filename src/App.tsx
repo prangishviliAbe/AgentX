@@ -49,6 +49,61 @@ export default function App() {
 
   const streamingId = useRef<string | null>(null);
   const thoughtId = useRef<string | null>(null);
+  /** toolCallId → chat message id (update in place instead of spam) */
+  const toolMsgIds = useRef<Map<string, string>>(new Map());
+
+  const ensureAssistantFinal = useCallback((text: string) => {
+    const finalText = text.trim();
+    if (!finalText) return;
+    setMessages((prev) => {
+      const lastAssistant = [...prev]
+        .reverse()
+        .find((m) => m.role === "assistant");
+      if (!lastAssistant) {
+        return [
+          ...prev,
+          {
+            id: uid(),
+            role: "assistant",
+            content: finalText,
+            streaming: false,
+          },
+        ];
+      }
+      // Same or extension of streamed text → replace
+      if (
+        finalText === lastAssistant.content ||
+        finalText.startsWith(lastAssistant.content) ||
+        lastAssistant.content.startsWith(finalText.slice(0, 32))
+      ) {
+        return prev.map((m) =>
+          m.id === lastAssistant.id
+            ? {
+                ...m,
+                content:
+                  finalText.length >= lastAssistant.content.length
+                    ? finalText
+                    : lastAssistant.content,
+                streaming: false,
+              }
+            : m,
+        );
+      }
+      // Post-tool final answer (new content) → new bubble
+      return [
+        ...prev.map((m) =>
+          m.id === lastAssistant.id ? { ...m, streaming: false } : m,
+        ),
+        {
+          id: uid(),
+          role: "assistant",
+          content: finalText,
+          streaming: false,
+        },
+      ];
+    });
+    streamingId.current = null;
+  }, []);
 
   const refreshAuth = useCallback(async () => {
     const status = await window.agentx.getAuthStatus();
@@ -152,7 +207,6 @@ export default function App() {
         }
 
         if (kind === "tool_call") {
-          // Close open assistant stream before tools; start a fresh one after
           if (streamingId.current) {
             const id = streamingId.current;
             streamingId.current = null;
@@ -161,11 +215,14 @@ export default function App() {
             );
           }
           thoughtId.current = null;
-          const title = update.title || update.toolCallId || "tool";
+          const callId = update.toolCallId || uid();
+          const title = update.title || callId;
+          const msgId = uid();
+          toolMsgIds.current.set(callId, msgId);
           setMessages((prev) => [
             ...prev,
             {
-              id: uid(),
+              id: msgId,
               role: "tool",
               content: `${title} · running`,
               meta: update.kind,
@@ -175,15 +232,28 @@ export default function App() {
         }
 
         if (kind === "tool_call_update") {
-          const title = update.title || "tool";
-          const status = update.status || "updated";
-          // Only surface meaningful status changes (avoid spam + empty titles)
-          if (
-            status === "completed" ||
-            status === "failed" ||
-            status === "cancelled" ||
-            update.title
-          ) {
+          const callId = update.toolCallId || "";
+          const status = update.status || "";
+          const title = update.title;
+          const existingId = callId
+            ? toolMsgIds.current.get(callId)
+            : undefined;
+
+          // Update in place when we know the toolCallId
+          if (existingId && (status || title)) {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== existingId) return m;
+                const base = title || m.content.split(" · ")[0] || "tool";
+                const st = status || "updated";
+                return { ...m, content: `${base} · ${st}` };
+              }),
+            );
+            return;
+          }
+
+          // Only add a row for titled updates or terminal statuses without id map
+          if (title && (status === "completed" || status === "failed" || status === "cancelled")) {
             setMessages((prev) => [
               ...prev,
               {
@@ -202,36 +272,7 @@ export default function App() {
           assistantText?: string;
           thoughtText?: string;
         };
-        const text = (info.assistantText || "").trim();
-        if (!text) return;
-        setMessages((prev) => {
-          // If we already streamed the same (or longer) text, skip
-          const lastAssistant = [...prev]
-            .reverse()
-            .find((m) => m.role === "assistant");
-          if (
-            lastAssistant &&
-            (lastAssistant.content === text ||
-              text.startsWith(lastAssistant.content) ||
-              lastAssistant.content.includes(text.slice(0, 40)))
-          ) {
-            return prev.map((m) =>
-              m.id === lastAssistant.id
-                ? { ...m, content: text, streaming: false }
-                : m,
-            );
-          }
-          return [
-            ...prev,
-            {
-              id: uid(),
-              role: "assistant",
-              content: text,
-              streaming: false,
-            },
-          ];
-        });
-        streamingId.current = null;
+        ensureAssistantFinal(info.assistantText || "");
       }),
 
       window.agentx.on("acp:permission", (reqUnknown) => {
@@ -312,7 +353,7 @@ export default function App() {
     return () => {
       offs.forEach((off) => off());
     };
-  }, [selectedDiffPath]);
+  }, [selectedDiffPath, ensureAssistantFinal]);
 
   const openFolder = async () => {
     const folder = await window.agentx.openWorkspace();
@@ -440,34 +481,12 @@ export default function App() {
         })),
       )) as { assistantText?: string } | boolean;
 
-      // Fallback if streaming events were missed by the renderer
       const finalText =
         result && typeof result === "object"
           ? (result.assistantText || "").trim()
           : "";
-      if (finalText) {
-        setMessages((prev) => {
-          const lastAssistant = [...prev]
-            .reverse()
-            .find((m) => m.role === "assistant");
-          if (lastAssistant?.content) {
-            return prev.map((m) =>
-              m.id === lastAssistant.id
-                ? { ...m, content: finalText, streaming: false }
-                : m,
-            );
-          }
-          return [
-            ...prev,
-            {
-              id: uid(),
-              role: "assistant",
-              content: finalText,
-              streaming: false,
-            },
-          ];
-        });
-      }
+      ensureAssistantFinal(finalText);
+      toolMsgIds.current.clear();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       setMessages((prev) => [
