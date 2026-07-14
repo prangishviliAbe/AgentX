@@ -362,7 +362,9 @@ export default function App() {
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
 
     try {
-      if (!agent.running) {
+      // Always ensure a live agent process (reconnect if previous session died)
+      const st = (await window.agentx.acpStatus()) as { running?: boolean };
+      if (!st.running) {
         await startAgent();
       }
       const snapshotPaths = tabs.map((t) => t.path);
@@ -381,7 +383,7 @@ export default function App() {
         ...prev,
         { id: uid(), role: "system", content: message },
       ]);
-      setAgent((a) => ({ ...a, lastError: message }));
+      setAgent((a) => ({ ...a, lastError: message, running: false }));
     } finally {
       if (streamingId.current) {
         const id = streamingId.current;

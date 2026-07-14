@@ -40,12 +40,19 @@ export function resolveOptionId(
   options?: PermissionOption[],
 ): string {
   if (options?.length) {
-    const allowLike = options.find((o) =>
-      /allow|approve|yes|accept/i.test(`${o.optionId} ${o.name ?? ""} ${o.kind ?? ""}`),
-    );
-    const denyLike = options.find((o) =>
-      /deny|reject|no|cancel/i.test(`${o.optionId} ${o.name ?? ""} ${o.kind ?? ""}`),
-    );
+    const score = (o: PermissionOption) =>
+      `${o.optionId} ${o.name ?? ""} ${o.kind ?? ""}`;
+    const allowLike =
+      options.find((o) =>
+        /allow_once|allow-once|allowonce/i.test(score(o)),
+      ) ||
+      options.find((o) =>
+        /allow_always|allow-always|allow|approve|yes|accept/i.test(score(o)),
+      );
+    const denyLike =
+      options.find((o) =>
+        /reject_once|reject-once|deny|reject|no|cancel/i.test(score(o)),
+      );
     if (decision === "allow" && allowLike) return allowLike.optionId;
     if (decision === "deny" && denyLike) return denyLike.optionId;
     // First option often allow-once; last often deny
@@ -79,8 +86,23 @@ export function normalizePermissionRequest(
   params: Record<string, unknown> | null | undefined,
 ): PermissionRequestPayload {
   const p = params || {};
-  const toolCall = (p.toolCall || p.tool_call || {}) as PermissionRequestPayload["toolCall"];
-  const options = (p.options || p.permissionOptions || []) as PermissionOption[];
+  const toolCall = (p.toolCall || p.tool_call || {}) as PermissionRequestPayload["toolCall"] &
+    Record<string, unknown>;
+  let options = (p.options || p.permissionOptions || []) as PermissionOption[];
+  // Some agents nest options under toolCall
+  if ((!options || !options.length) && toolCall && Array.isArray(toolCall.options)) {
+    options = toolCall.options as PermissionOption[];
+  }
+  // Normalize { id, label } shapes to optionId/name
+  options = (Array.isArray(options) ? options : []).map((o) => {
+    const any = o as PermissionOption & { id?: string; label?: string };
+    return {
+      optionId: any.optionId || any.id || "",
+      name: any.name || any.label,
+      kind: any.kind,
+    };
+  }).filter((o) => o.optionId);
+
   return {
     requestId: messageId,
     sessionId: typeof p.sessionId === "string" ? p.sessionId : undefined,
@@ -94,7 +116,7 @@ export function normalizePermissionRequest(
       kind: toolCall?.kind || (typeof p.kind === "string" ? p.kind : undefined),
       rawInput: toolCall?.rawInput ?? p.rawInput,
     },
-    options: Array.isArray(options) ? options : [],
+    options,
   };
 }
 

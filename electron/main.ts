@@ -341,8 +341,22 @@ function registerIpc(): void {
 
   ipcMain.handle("settings:get", async () => ({ alwaysApprove }));
   ipcMain.handle("settings:set-always-approve", async (_e, value: boolean) => {
-    alwaysApprove = Boolean(value);
+    const next = Boolean(value);
+    const changed = next !== alwaysApprove;
+    alwaysApprove = next;
     acp?.setAlwaysApprove(alwaysApprove);
+    // CLI --always-approve is only applied at process start — restart agent
+    if (changed && acp?.isRunning && workspacePath) {
+      try {
+        acp.stop();
+        acp = null;
+        await ensureAcp(workspacePath);
+      } catch (err) {
+        send("acp:error", {
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
     return { alwaysApprove };
   });
 

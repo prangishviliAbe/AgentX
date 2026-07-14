@@ -113,9 +113,11 @@ export class GrokAcpClient extends EventEmitter {
     if (this.started) return;
 
     const bin = resolveGrokBinary();
-    // Never pass --always-approve: we handle allow/deny in-process so the UI
-    // can toggle interactive permissions without restarting the agent.
-    const args = ["agent", "stdio"];
+    // When auto-approve is on, also pass CLI flag — Grok's internal tools honor it.
+    // Interactive mode omits the flag and uses session/request_permission → UI.
+    const args = this.alwaysApprove
+      ? ["agent", "--always-approve", "stdio"]
+      : ["agent", "stdio"];
 
     this.proc = spawn(bin, args, {
       cwd: this.cwd,
