@@ -1,0 +1,91 @@
+{
+  "name": "agentx",
+  "version": "1.0.0",
+  "description": "AgentX — VS Code-style desktop shell for the Grok coding agent",
+  "author": "Abe Prangishvili",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/prangishviliAbe/AgentX.git"
+  },
+  "bugs": {
+    "url": "https://github.com/prangishviliAbe/AgentX/issues"
+  },
+  "homepage": "https://github.com/prangishviliAbe/AgentX#readme",
+  "keywords": [
+    "agentx",
+    "grok",
+    "xai",
+    "electron",
+    "monaco",
+    "ai-coding",
+    "acp",
+    "desktop"
+  ],
+  "private": true,
+  "main": "dist-electron/main.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "test": "tsx --test tests/**/*.test.ts",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder",
+    "postinstall": "node scripts/ensure-electron.js"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.21",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "@vitejs/plugin-react": "^4.4.1",
+    "electron": "^36.2.1",
+    "electron-builder": "^26.0.12",
+    "tsx": "^4.23.1",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6"
+  },
+  "build": {
+    "appId": "com.agentx.app",
+    "productName": "AgentX",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "allowScripts": {
+    "electron@36.9.5": true,
+    "esbuild@0.25.12": true
+  }
+}
