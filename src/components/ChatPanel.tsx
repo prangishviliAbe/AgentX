@@ -6,6 +6,7 @@ type Props = {
   busy: boolean;
   disabledReason: string | null;
   canContinue?: boolean;
+  activityHint?: string | null;
   onContinue?: () => void;
   onStop?: () => void;
   onSend: (text: string, images: ChatImage[]) => void;
@@ -44,6 +45,7 @@ export function ChatPanel({
   busy,
   disabledReason,
   canContinue,
+  activityHint,
   onContinue,
   onStop,
   onSend,
@@ -143,8 +145,12 @@ export function ChatPanel({
         {messages.map((m) => (
           <div key={m.id} className={`msg ${m.role}`}>
             <div className="msg-role">
-              {m.role}
-              {m.streaming ? " · streaming" : ""}
+              {m.role === "thought"
+                ? "thinking"
+                : m.role === "assistant"
+                  ? "assistant"
+                  : m.role}
+              {m.streaming ? " · live" : ""}
               {m.meta ? ` · ${m.meta}` : ""}
             </div>
             {m.images && m.images.length > 0 && (
@@ -165,8 +171,13 @@ export function ChatPanel({
         ))}
         {busy && (
           <div className="msg system busy-banner">
-            მუშაობს… თუ გაიჭედა, დააჭირე <strong>Stop</strong>, შემდეგ{" "}
-            <strong>Continue</strong> ან ახალი შეტყობინება.
+            <div>
+              <strong>{activityHint || "Working…"}</strong>
+            </div>
+            <div style={{ marginTop: 6 }}>
+              If stuck: press <strong>Stop</strong>, then <strong>Continue</strong>{" "}
+              or send a new message.
+            </div>
           </div>
         )}
         <div ref={bottomRef} />

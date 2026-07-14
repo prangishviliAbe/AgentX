@@ -56,6 +56,9 @@ export default function App() {
   const toolMsgIds = useRef<Map<string, string>>(new Map());
   /** Prevent infinite auto-continue loops within one user ask */
   const autoContinueLeft = useRef(0);
+  /** Last ACP event timestamp — used to detect silent hangs while busy */
+  const lastAcpAt = useRef<number>(Date.now());
+  const [activityHint, setActivityHint] = useState<string | null>(null);
 
   const ensureAssistantFinal = useCallback((text: string) => {
     const finalText = text.trim();
@@ -157,28 +160,67 @@ export default function App() {
     void bootstrap();
   }, [bootstrap]);
 
+  // If busy but no ACP traffic for a while, unlock so the UI doesn't freeze forever
+  useEffect(() => {
+    if (!agent.busy) {
+      setActivityHint(null);
+      return;
+    }
+    const tick = window.setInterval(() => {
+      const silentMs = Date.now() - lastAcpAt.current;
+      if (silentMs > 25_000) {
+        setActivityHint(
+          `No agent activity for ${Math.round(silentMs / 1000)}s — press Stop if stuck`,
+        );
+      }
+      if (silentMs > 90_000) {
+        void window.agentx.acpCancel();
+        setAgent((a) => ({ ...a, busy: false }));
+        autoContinueLeft.current = 0;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "system",
+            content:
+              "Turn auto-stopped after 90s of silence. Press Continue or send a new message.",
+          },
+        ]);
+        setActivityHint(null);
+      }
+    }, 2000);
+    return () => window.clearInterval(tick);
+  }, [agent.busy]);
+
   useEffect(() => {
     const offs = [
       window.agentx.on("acp:update", (updateUnknown) => {
+        lastAcpAt.current = Date.now();
+        setActivityHint(null);
         const update = updateUnknown as {
           sessionUpdate?: string;
-          content?: { text?: string } | string;
+          content?: { text?: string } | string | unknown[];
           text?: string;
           title?: string;
           status?: string;
           kind?: string;
           toolCallId?: string;
+          rawOutput?: unknown;
         };
 
         const kind = update.sessionUpdate || "";
         const chunk =
           typeof update.content === "string"
             ? update.content
-            : update.content?.text || update.text || "";
+            : update.content &&
+                typeof update.content === "object" &&
+                !Array.isArray(update.content)
+              ? (update.content as { text?: string }).text || ""
+              : update.text || "";
 
         if (kind === "agent_message_chunk") {
           if (!chunk) return;
-          // New assistant bubble after tools — do not reuse cleared streaming id
+          setActivityHint("Writing answer…");
           setMessages((prev) => {
             const id = streamingId.current;
             if (id) {
@@ -205,16 +247,27 @@ export default function App() {
 
         if (kind === "agent_thought_chunk") {
           if (!chunk) return;
+          setActivityHint("Thinking…");
           setMessages((prev) => {
             const id = thoughtId.current;
             if (id) {
               return prev.map((m) =>
-                m.id === id ? { ...m, content: m.content + chunk } : m,
+                m.id === id
+                  ? { ...m, content: m.content + chunk, streaming: true }
+                  : m,
               );
             }
             const newId = uid();
             thoughtId.current = newId;
-            return [...prev, { id: newId, role: "thought", content: chunk }];
+            return [
+              ...prev,
+              {
+                id: newId,
+                role: "thought",
+                content: chunk,
+                streaming: true,
+              },
+            ];
           });
           return;
         }
@@ -227,11 +280,19 @@ export default function App() {
               prev.map((m) => (m.id === id ? { ...m, streaming: false } : m)),
             );
           }
-          thoughtId.current = null;
+          // Keep thought bubble open/closed cleanly
+          if (thoughtId.current) {
+            const tid = thoughtId.current;
+            thoughtId.current = null;
+            setMessages((prev) =>
+              prev.map((m) => (m.id === tid ? { ...m, streaming: false } : m)),
+            );
+          }
           const callId = update.toolCallId || uid();
           const title = update.title || callId;
           const msgId = uid();
           toolMsgIds.current.set(callId, msgId);
+          setActivityHint(`Tool: ${title}`);
           setMessages((prev) => [
             ...prev,
             {
@@ -252,7 +313,6 @@ export default function App() {
             ? toolMsgIds.current.get(callId)
             : undefined;
 
-          // Update in place when we know the toolCallId
           if (existingId && (status || title)) {
             setMessages((prev) =>
               prev.map((m) => {
@@ -262,11 +322,38 @@ export default function App() {
                 return { ...m, content: `${base} · ${st}` };
               }),
             );
+            if (status === "failed") {
+              const detail =
+                typeof update.content === "string"
+                  ? update.content
+                  : Array.isArray(update.content)
+                    ? JSON.stringify(update.content).slice(0, 300)
+                    : update.rawOutput
+                      ? String(update.rawOutput).slice(0, 300)
+                      : "";
+              setMessages((prev) => [
+                ...prev,
+                {
+                  id: uid(),
+                  role: "system",
+                  content: detail
+                    ? `Tool failed: ${title || callId} — ${detail}`
+                    : `Tool failed: ${title || callId}. Agent may retry or stop.`,
+                },
+              ]);
+              setActivityHint("Tool failed — waiting for agent…");
+            } else if (status === "completed") {
+              setActivityHint("Tool done — waiting for next step…");
+            }
             return;
           }
 
-          // Only add a row for titled updates or terminal statuses without id map
-          if (title && (status === "completed" || status === "failed" || status === "cancelled")) {
+          if (
+            title &&
+            (status === "completed" ||
+              status === "failed" ||
+              status === "cancelled")
+          ) {
             setMessages((prev) => [
               ...prev,
               {
@@ -492,6 +579,8 @@ export default function App() {
     }
 
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
+    lastAcpAt.current = Date.now();
+    setActivityHint("Starting turn…");
 
     try {
       const st = (await window.agentx.acpStatus()) as { running?: boolean };
@@ -546,6 +635,7 @@ export default function App() {
       }
       thoughtId.current = null;
       setAgent((a) => ({ ...a, busy: false }));
+      setActivityHint(null);
       if (workspace) void refreshTree(workspace);
       void refreshChanges();
     }
@@ -817,10 +907,10 @@ export default function App() {
           busy={agent.busy}
           disabledReason={disabledReason}
           canContinue={
-            !autoContinue &&
             !disabledReason &&
-            messages.some((m) => m.role === "assistant")
+            messages.some((m) => m.role === "assistant" || m.role === "tool")
           }
+          activityHint={activityHint}
           onContinue={() => void continueAgent()}
           onStop={() => void stopAgent()}
           onSend={(text, images) => void sendPrompt(text, images)}
