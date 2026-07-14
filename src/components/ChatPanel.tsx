@@ -262,13 +262,19 @@ export function ChatPanel({
               </div>
             ) : null}
             <div className="activity-rail-foot">
-              {autoContinue
-                ? "Auto-continue is on — agent will keep going when needed."
-                : (
+              {activityHint && /quiet|without stream|Still working/i.test(activityHint)
+                ? (
                   <>
-                    Press <strong>Stop</strong> if this hangs.
+                    Taking longer than usual — press <strong>Stop</strong> to unlock, then Continue.
                   </>
-                )}
+                )
+                : autoContinue
+                  ? "Auto-continue is on — finishing when the agent only posts a short plan."
+                  : (
+                    <>
+                      Press <strong>Stop</strong> if this hangs.
+                    </>
+                  )}
             </div>
           </div>
         )}

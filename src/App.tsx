@@ -63,6 +63,8 @@ export default function App() {
   const toolMsgIds = useRef<Map<string, string>>(new Map());
   /** Prevent infinite auto-continue loops within one user ask */
   const autoContinueLeft = useRef(0);
+  /** Hard stop for send/continue chains (Stop button or silence watchdog) */
+  const turnAborted = useRef(false);
   /** Last ACP event timestamp — used to detect silent hangs while busy */
   const lastAcpAt = useRef<number>(Date.now());
   const [activityHint, setActivityHint] = useState<string | null>(null);
@@ -174,32 +176,35 @@ export default function App() {
   // If busy but no ACP traffic for a while, unlock so the UI doesn't freeze forever
   useEffect(() => {
     if (!agent.busy) {
-      setActivityHint(null);
       return;
     }
     const tick = window.setInterval(() => {
+      if (turnAborted.current) return;
       const silentMs = Date.now() - lastAcpAt.current;
-      if (silentMs > 25_000) {
+      if (silentMs > 18_000 && silentMs <= 40_000) {
         setActivityHint(
-          `No agent activity for ${Math.round(silentMs / 1000)}s — press Stop if stuck`,
+          `Still working… ${Math.round(silentMs / 1000)}s without stream`,
         );
       }
-      if (silentMs > 90_000) {
+      // Recover earlier than before — 40s silence is enough to call it stuck
+      if (silentMs > 40_000) {
+        turnAborted.current = true;
+        autoContinueLeft.current = 0;
         void window.agentx.acpCancel();
         setAgent((a) => ({ ...a, busy: false }));
-        autoContinueLeft.current = 0;
+        setLiveThought("");
+        setActivityHint(null);
         setMessages((prev) => [
           ...prev,
           {
             id: uid(),
             role: "system",
             content:
-              "Turn auto-stopped after 90s of silence. Press Continue or send a new message.",
+              "Agent went quiet for 40s — unlocked automatically. Press Continue or send a new message.",
           },
         ]);
-        setActivityHint(null);
       }
-    }, 2000);
+    }, 1500);
     return () => window.clearInterval(tick);
   }, [agent.busy]);
 
@@ -568,7 +573,11 @@ export default function App() {
       holdBusy?: boolean;
       userQuestion?: string;
     },
-  ): Promise<{ text: string; toolsRan: boolean }> => {
+  ): Promise<{ text: string; toolsRan: boolean; aborted: boolean }> => {
+    if (turnAborted.current) {
+      return { text: "", toolsRan: false, aborted: true };
+    }
+
     streamingId.current = null;
     thoughtId.current = null;
     toolsThisTurn.current = 0;
@@ -609,6 +618,9 @@ export default function App() {
       if (!st.running) {
         await startAgent();
       }
+      if (turnAborted.current) {
+        return { text: "", toolsRan: false, aborted: true };
+      }
 
       let promptText = text;
       if (opts?.silentUser && opts.userQuestion) {
@@ -629,27 +641,49 @@ export default function App() {
           data: img.data,
           uri: img.name ? `attachment://${img.name}` : undefined,
         })),
+        // Auto-continue turns get a shorter hard timeout so they can't freeze the UI
         { timeoutMs: opts?.timeoutMs ?? 120_000 },
-      )) as { assistantText?: string } | boolean;
+      )) as { assistantText?: string; timedOut?: boolean } | boolean;
+
+      if (turnAborted.current) {
+        return { text: "", toolsRan: toolsThisTurn.current > 0, aborted: true };
+      }
 
       const finalText =
         result && typeof result === "object"
           ? (result.assistantText || "").trim()
           : "";
+      const timedOut =
+        result && typeof result === "object" ? Boolean(result.timedOut) : false;
       ensureAssistantFinal(finalText);
       toolMsgIds.current.clear();
-      return { text: finalText, toolsRan: toolsThisTurn.current > 0 };
+      return {
+        text: finalText,
+        toolsRan: toolsThisTurn.current > 0,
+        aborted: timedOut,
+      };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      setMessages((prev) => [
-        ...prev,
-        { id: uid(), role: "system", content: message },
-      ]);
+      const cancelled = /cancel|timed out|abort/i.test(message);
+      if (cancelled) {
+        turnAborted.current = true;
+        autoContinueLeft.current = 0;
+      }
+      if (!turnAborted.current || !/cancel/i.test(message)) {
+        setMessages((prev) => [
+          ...prev,
+          { id: uid(), role: "system", content: message },
+        ]);
+      }
       setAgent((a) => ({
         ...a,
-        lastError: /cancel|timed out/i.test(message) ? null : message,
+        lastError: cancelled ? null : message,
       }));
-      return { text: "", toolsRan: toolsThisTurn.current > 0 };
+      return {
+        text: "",
+        toolsRan: toolsThisTurn.current > 0,
+        aborted: true,
+      };
     } finally {
       if (streamingId.current) {
         const id = streamingId.current;
@@ -666,7 +700,8 @@ export default function App() {
         );
       }
       setLiveThought("");
-      if (!opts?.holdBusy) {
+      // Always clear busy when aborted; holdBusy only applies to successful chain steps
+      if (!opts?.holdBusy || turnAborted.current) {
         setAgent((a) => ({ ...a, busy: false }));
         setActivityHint(null);
         if (workspace) void refreshTree(workspace);
@@ -676,6 +711,7 @@ export default function App() {
   };
 
   const sendPrompt = async (text: string, images: ChatImage[] = []) => {
+    turnAborted.current = false;
     // Immediate UI feedback — user sees Active + thinking rail before ACP connects
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
     setActivityHint("Starting…");
@@ -694,28 +730,35 @@ export default function App() {
     let step = 0;
 
     while (
+      !turnAborted.current &&
+      !result.aborted &&
       autoContinue &&
       autoContinueLeft.current > 0 &&
       shouldAutoContinue(result.text, { toolsRan: result.toolsRan })
     ) {
       autoContinueLeft.current -= 1;
       step += 1;
+      // Brief pause so the previous turn fully settles (avoids prompt-on-busy hang)
+      await new Promise((r) => setTimeout(r, 350));
+      if (turnAborted.current) break;
       result = await runAgentTurn(CONTINUE_PROMPT, [], {
         silentUser: true,
-        timeoutMs: 75_000,
+        timeoutMs: 55_000,
         noMoreTools: step >= 1 || result.toolsRan,
-        holdBusy: autoContinueLeft.current > 0,
+        holdBusy: autoContinueLeft.current > 0 && !turnAborted.current,
         userQuestion,
       });
     }
 
     setAgent((a) => ({ ...a, busy: false }));
     setActivityHint(null);
+    setLiveThought("");
     if (workspace) void refreshTree(workspace);
     void refreshChanges();
   };
 
   const continueAgent = async () => {
+    turnAborted.current = false;
     if (agent.busy) {
       try {
         await window.agentx.acpCancel();
@@ -723,35 +766,42 @@ export default function App() {
         // ignore
       }
       setAgent((a) => ({ ...a, busy: false }));
-      await new Promise((r) => setTimeout(r, 150));
+      await new Promise((r) => setTimeout(r, 200));
     }
+    turnAborted.current = false;
     const maxSteps = autoContinue
       ? Math.min(5, Math.max(1, autoContinueMax))
       : 1;
     autoContinueLeft.current = maxSteps;
     let result = await runAgentTurn(CONTINUE_PROMPT, [], {
       silentUser: true,
-      timeoutMs: 75_000,
+      timeoutMs: 55_000,
       holdBusy: autoContinue && maxSteps > 1,
     });
     while (
+      !turnAborted.current &&
+      !result.aborted &&
       autoContinue &&
       autoContinueLeft.current > 0 &&
       shouldAutoContinue(result.text, { toolsRan: result.toolsRan })
     ) {
       autoContinueLeft.current -= 1;
+      await new Promise((r) => setTimeout(r, 350));
+      if (turnAborted.current) break;
       result = await runAgentTurn(CONTINUE_PROMPT, [], {
         silentUser: true,
-        timeoutMs: 75_000,
+        timeoutMs: 55_000,
         noMoreTools: true,
-        holdBusy: autoContinueLeft.current > 0,
+        holdBusy: autoContinueLeft.current > 0 && !turnAborted.current,
       });
     }
     setAgent((a) => ({ ...a, busy: false }));
     setActivityHint(null);
+    setLiveThought("");
   };
 
   const stopAgent = async () => {
+    turnAborted.current = true;
     autoContinueLeft.current = 0;
     try {
       await window.agentx.acpCancel();
@@ -760,6 +810,7 @@ export default function App() {
     }
     setAgent((a) => ({ ...a, busy: false }));
     setActivityHint(null);
+    setLiveThought("");
     streamingId.current = null;
     thoughtId.current = null;
     setMessages((prev) => [

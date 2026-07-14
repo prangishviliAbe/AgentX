@@ -14,7 +14,7 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 | **Product** | AgentX |
 | **Codename** | AbeX |
 | **Author** | Abe Prangishvili |
-| **Version** | 1.1.1 |
+| **Version** | 1.1.2 |
 | **License** | MIT |
 | **Repo** | [github.com/prangishviliAbe/AgentX](https://github.com/prangishviliAbe/AgentX) |
 

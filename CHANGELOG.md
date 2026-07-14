@@ -5,6 +5,20 @@ All notable changes to **AgentX** (codename **AbeX**) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.2] — 2026-07-14
+
+### Fixed
+
+- **Agent stuck after Auto-continue** — silence no longer freezes the UI for 90s+; auto-unlock after **40s** with no stream
+- **Terminal tool hangs** — `terminal/wait_for_exit` hard-timeout (25s) + auto-kill runaway shells (45s); was the main cause of `…updated` forever and empty activity
+- Auto-continue chain no longer keeps **busy** after cancel/timeout (`turnAborted` stops further steps)
+- Shorter auto-continue turn timeout (55s) and brief settle delay between steps
+
+### Changed
+
+- Activity rail: “Still working…” after 18s silence instead of alarming “press Stop if stuck” immediately
+- Clearer unlock message when the agent goes quiet
+
 ## [1.1.1] — 2026-07-14
 
 ### Added

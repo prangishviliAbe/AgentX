@@ -176,12 +176,26 @@ export class AcpClientHandlers {
     proc.on("error", (err) => {
       append(Buffer.from(`\n[spawn error] ${err.message}\n`));
       state.exitCode = state.exitCode ?? 1;
-      state.signal = state.signal ?? null;
+      state.signal = state.signal ?? "ERROR";
     });
     proc.on("exit", (code, signal) => {
       state.exitCode = code;
       state.signal = signal;
     });
+
+    // Safety net: kill runaway shells even if wait_for_exit is never called
+    setTimeout(() => {
+      if (state.exitCode === null && state.signal === null) {
+        append(
+          Buffer.from(
+            "\n[agentx] terminal auto-killed after 45s (runaway process)\n",
+          ),
+        );
+        this.killProc(proc);
+        state.exitCode = 124;
+        state.signal = "TIMEOUT";
+      }
+    }, 45_000);
 
     this.terminals.set(terminalId, state);
     return { terminalId };
@@ -211,29 +225,67 @@ export class AcpClientHandlers {
     if (t.exitCode !== null || t.signal !== null) {
       return Promise.resolve({ exitCode: t.exitCode, signal: t.signal });
     }
+
+    // Hard cap — without this, a hung PowerShell process freezes the whole agent turn
+    const timeoutMs =
+      typeof params.timeoutMs === "number" && params.timeoutMs > 0
+        ? params.timeoutMs
+        : 25_000;
+
     return new Promise((resolve) => {
+      let settled = false;
+      const finish = (exitCode: number | null, signal: string | null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ exitCode, signal });
+      };
+
+      const timer = setTimeout(() => {
+        // Kill hung process so the agent can continue / finish the turn
+        try {
+          this.killProc(t.proc);
+        } catch {
+          // ignore
+        }
+        t.exitCode = t.exitCode ?? 124;
+        t.signal = t.signal ?? "TIMEOUT";
+        t.output +=
+          "\n[agentx] terminal/wait_for_exit timed out after " +
+          `${Math.round(timeoutMs / 1000)}s — process killed\n`;
+        finish(t.exitCode, t.signal);
+      }, timeoutMs);
+
       t.proc.once("exit", (code, signal) => {
-        resolve({ exitCode: code, signal });
+        finish(code, signal);
       });
+      // If spawn already failed, exit may have fired before we attached
+      if (t.exitCode !== null || t.signal !== null) {
+        finish(t.exitCode, t.signal);
+      }
     });
+  }
+
+  private killProc(proc: ChildProcess): void {
+    try {
+      if (process.platform === "win32" && proc.pid) {
+        spawn("taskkill", ["/pid", String(proc.pid), "/T", "/F"], {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+      } else {
+        proc.kill("SIGKILL");
+      }
+    } catch {
+      // ignore
+    }
   }
 
   private terminalKill(params: Record<string, unknown>) {
     const id = String(params.terminalId || "");
     const t = this.terminals.get(id);
     if (!t) throw new Error(`Unknown terminal: ${id}`);
-    try {
-      if (process.platform === "win32" && t.proc.pid) {
-        spawn("taskkill", ["/pid", String(t.proc.pid), "/T", "/F"], {
-          stdio: "ignore",
-          windowsHide: true,
-        });
-      } else {
-        t.proc.kill();
-      }
-    } catch {
-      // ignore
-    }
+    this.killProc(t.proc);
     return {};
   }
 

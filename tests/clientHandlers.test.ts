@@ -72,4 +72,33 @@ describe("ACP client fs handlers", () => {
       h.dispose();
     }
   });
+
+  it("terminal/wait_for_exit times out instead of hanging forever", async () => {
+    if (!isWin) return;
+    const h = new AcpClientHandlers();
+    try {
+      const created = (await h.handle("terminal/create", {
+        command: "Start-Sleep -Seconds 60",
+        cwd: process.cwd(),
+      })) as { terminalId: string };
+      const started = Date.now();
+      const exit = (await h.handle("terminal/wait_for_exit", {
+        terminalId: created.terminalId,
+        timeoutMs: 1500,
+      })) as { exitCode: number | null; signal: string | null };
+      const elapsed = Date.now() - started;
+      assert.ok(elapsed < 8_000, `wait took too long: ${elapsed}ms`);
+      assert.ok(
+        exit.exitCode === 124 || exit.signal === "TIMEOUT" || exit.exitCode !== null,
+        `expected timeout kill, got ${JSON.stringify(exit)}`,
+      );
+      const out = (await h.handle("terminal/output", {
+        terminalId: created.terminalId,
+      })) as { output: string };
+      assert.match(out.output, /timed out|TIMEOUT|agentx/i);
+      await h.handle("terminal/release", { terminalId: created.terminalId });
+    } finally {
+      h.dispose();
+    }
+  });
 });
