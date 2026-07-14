@@ -5,6 +5,8 @@ import path from "node:path";
 import os from "node:os";
 import { AcpClientHandlers } from "../electron/acp/clientHandlers.ts";
 
+const isWin = process.platform === "win32";
+
 describe("ACP client fs handlers", () => {
   it("reads package.json content from workspace", async () => {
     const dir = path.join(os.tmpdir(), `agentx-fs-${Date.now()}`);
@@ -42,6 +44,32 @@ describe("ACP client fs handlers", () => {
     } finally {
       h.dispose();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("runs PowerShell one-liner via terminal/create without crashing", async () => {
+    if (!isWin) return;
+    const h = new AcpClientHandlers();
+    try {
+      const created = (await h.handle("terminal/create", {
+        command:
+          "Get-ChildItem -Force | Select-Object -First 3 Name | Format-Table -AutoSize; Write-Output agentx-term-ps-ok",
+        cwd: process.cwd(),
+      })) as { terminalId: string };
+      assert.ok(created.terminalId);
+      const exit = (await h.handle("terminal/wait_for_exit", {
+        terminalId: created.terminalId,
+      })) as { exitCode: number | null };
+      const out = (await h.handle("terminal/output", {
+        terminalId: created.terminalId,
+      })) as { output: string };
+      assert.ok(
+        out.output.includes("agentx-term-ps-ok") || exit.exitCode === 0,
+        `output=${JSON.stringify(out.output.slice(0, 200))}`,
+      );
+      await h.handle("terminal/release", { terminalId: created.terminalId });
+    } finally {
+      h.dispose();
     }
   });
 });

@@ -72,6 +72,62 @@ export class AcpClientHandlers {
     return null;
   }
 
+  /**
+   * Grok often sends full shell one-liners as `command` with empty `args`
+   * (e.g. entire PowerShell pipelines). Spawning that string as an executable
+   * causes ENOENT and crashes Electron if the error event is unhandled.
+   */
+  private spawnCommand(
+    command: string,
+    args: string[],
+    cwd: string,
+    env: NodeJS.ProcessEnv,
+  ): ChildProcess {
+    const looksLikeShellScript =
+      args.length === 0 &&
+      (/[|&;<>$`]/.test(command) ||
+        /\s/.test(command) ||
+        /^(Get-|Set-|if |foreach |\$)/i.test(command.trim()));
+
+    if (process.platform === "win32" && (looksLikeShellScript || args.length === 0)) {
+      // Prefer PowerShell for Get-*/pipelines; falls back cleanly for simple cmds.
+      const isPs =
+        looksLikeShellScript ||
+        /^(Get-|Set-|Test-|Write-|Select-|ForEach|\$)/i.test(command.trim());
+      if (isPs) {
+        return spawn(
+          "powershell.exe",
+          ["-NoLogo", "-NoProfile", "-NonInteractive", "-Command", command],
+          { cwd, env, stdio: ["ignore", "pipe", "pipe"], windowsHide: true },
+        );
+      }
+      return spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", command], {
+        cwd,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+      });
+    }
+
+    if (looksLikeShellScript) {
+      return spawn(command, {
+        cwd,
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        windowsHide: true,
+        shell: true,
+      });
+    }
+
+    return spawn(command, args, {
+      cwd,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+      windowsHide: true,
+      shell: false,
+    });
+  }
+
   private terminalCreate(params: Record<string, unknown>) {
     const command = String(params.command || "");
     if (!command) throw new Error("terminal/create: command required");
@@ -95,13 +151,7 @@ export class AcpClientHandlers {
         ? params.outputByteLimit
         : 1_048_576;
 
-    const proc = spawn(command, args, {
-      cwd,
-      env,
-      stdio: ["ignore", "pipe", "pipe"],
-      windowsHide: true,
-      shell: false,
-    });
+    const proc = this.spawnCommand(command, args, cwd, env);
 
     const terminalId = `term_${this.nextTerm++}`;
     const state: TerminalState = {
@@ -122,6 +172,12 @@ export class AcpClientHandlers {
     };
     proc.stdout?.on("data", append);
     proc.stderr?.on("data", append);
+    // Critical: unhandled 'error' crashes the Electron main process (ENOENT dialog)
+    proc.on("error", (err) => {
+      append(Buffer.from(`\n[spawn error] ${err.message}\n`));
+      state.exitCode = state.exitCode ?? 1;
+      state.signal = state.signal ?? null;
+    });
     proc.on("exit", (code, signal) => {
       state.exitCode = code;
       state.signal = signal;

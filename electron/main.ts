@@ -37,6 +37,14 @@ app.disableHardwareAcceleration();
 app.commandLine.appendSwitch("disable-gpu");
 app.commandLine.appendSwitch("disable-gpu-compositing");
 
+// Prevent uncaught child_process 'error' events from killing the whole app UI
+process.on("uncaughtException", (err) => {
+  console.error("[agentx] uncaughtException:", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[agentx] unhandledRejection:", reason);
+});
+
 let mainWindow: BrowserWindow | null = null;
 let acp: GrokAcpClient | null = null;
 let workspacePath: string | null = null;
