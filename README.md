@@ -14,7 +14,7 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 | **Product** | AgentX |
 | **Codename** | AbeX |
 | **Author** | Abe Prangishvili |
-| **Version** | 1.1.2 |
+| **Version** | 1.1.3 |
 | **License** | MIT |
 | **Repo** | [github.com/prangishviliAbe/AgentX](https://github.com/prangishviliAbe/AgentX) |
 
@@ -40,19 +40,17 @@ Full release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ## Changelog
 
+### 1.1.2 — 2026-07-14
+
+**Fixed**
+
+- Auto-continue no longer freezes with “No agent activity for 47s…”
+- Terminal tools time out instead of hanging the whole turn
+- Busy state clears on cancel/timeout; chain stops cleanly
+
 ### 1.1.1 — 2026-07-14
 
-**Added**
-
-- Markdown rendering for assistant replies (headings, bold, lists, code)
-- **Activity rail** + header **Active** pill while the agent thinks/works
-- Immediate busy feedback on Send (before the first ACP chunk)
-
-**Fixed / Changed**
-
-- No more raw `**` / `###` in chat
-- Polished message cards, role badges, and status-bar busy state
-- Activity status stays accurate (Thinking / Tool / Writing)
+Markdown assistant replies, activity rail / Active pill, immediate busy feedback on Send.
 
 ### 1.1.0 — 2026-07-14
 
@@ -125,7 +123,7 @@ npm run dist
 
 Artifacts:
 
-- `release/AgentX Setup 1.1.1.exe` — installer  
+- `release/AgentX Setup 1.1.2.exe` — installer  
 - `release/win-unpacked/AgentX.exe` — portable run  
 
 ---

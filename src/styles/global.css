@@ -1519,3 +1519,174 @@ button:disabled {
   border-color: rgba(137, 209, 133, 0.45);
   background: rgba(137, 209, 133, 0.12);
 }
+
+/* —— Boot splash —— */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  background: #121214;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.splash-vignette {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 42%, rgba(0, 120, 212, 0.14) 0%, transparent 62%),
+    radial-gradient(ellipse 90% 80% at 50% 100%, rgba(0, 0, 0, 0.55) 0%, transparent 50%);
+  opacity: 0;
+  animation: splash-vignette-in 0.9s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.splash-center {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0;
+  padding: 24px;
+}
+
+.splash-mark {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #1c8ae6 0%, #0078d4 55%, #005a9e 100%);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  display: grid;
+  place-items: center;
+  margin-bottom: 22px;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08) inset,
+    0 12px 32px rgba(0, 90, 180, 0.28);
+  opacity: 0;
+  transform: translateY(14px) scale(0.92);
+  animation: splash-rise 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+}
+
+.splash-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: clamp(48px, 8vw, 72px);
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  color: #f3f3f3;
+  text-shadow: 0 2px 40px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(18px);
+  animation: splash-rise 0.85s cubic-bezier(0.16, 1, 0.3, 1) 0.12s forwards;
+}
+
+.splash-rule {
+  width: 0;
+  height: 1px;
+  margin: 18px 0 16px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 20%,
+    rgba(0, 120, 212, 0.75) 50%,
+    rgba(255, 255, 255, 0.35) 80%,
+    transparent 100%
+  );
+  animation: splash-rule 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.45s forwards;
+}
+
+.splash-codename {
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(10px);
+  animation: splash-rise 0.75s cubic-bezier(0.16, 1, 0.3, 1) 0.5s forwards;
+}
+
+.splash-codename-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #7a7a80;
+}
+
+.splash-codename-name {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: #9ec9ef;
+}
+
+/* Exit: whole overlay fades + slight lift */
+.splash-screen.splash-exit {
+  animation: splash-out 0.7s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.splash-screen.splash-exit .splash-center {
+  animation: splash-center-out 0.65s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes splash-rise {
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes splash-rule {
+  to {
+    width: 120px;
+  }
+}
+
+@keyframes splash-vignette-in {
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes splash-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes splash-center-out {
+  to {
+    opacity: 0;
+    transform: translateY(-8px) scale(1.02);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-vignette,
+  .splash-mark,
+  .splash-title,
+  .splash-rule,
+  .splash-codename {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+    width: auto;
+  }
+  .splash-rule {
+    width: 120px;
+  }
+  .splash-screen.splash-exit {
+    animation: splash-out 0.25s ease forwards;
+  }
+  .splash-screen.splash-exit .splash-center {
+    animation: none;
+  }
+}

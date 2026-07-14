@@ -67,5 +67,17 @@ describe("UI/IPC structural wiring", () => {
     assert.ok(read("src/App.tsx").includes("setLiveThought"));
     assert.ok(read("src/App.tsx").includes("activityHint"));
   });
+
+  it("boot splash with product name and codename exists", () => {
+    assert.ok(existsSync(path.join(root, "src/components/SplashScreen.tsx")));
+    const splash = read("src/components/SplashScreen.tsx");
+    const css = read("src/styles/global.css");
+    assert.ok(splash.includes("AgentX"));
+    assert.ok(splash.includes("AbeX"));
+    assert.ok(read("src/App.tsx").includes("SplashScreen"));
+    assert.ok(css.includes(".splash-screen"));
+    assert.ok(css.includes(".splash-title"));
+    assert.ok(css.includes("prefers-reduced-motion"));
+  });
 });
 

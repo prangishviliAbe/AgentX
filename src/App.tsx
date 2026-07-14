@@ -5,6 +5,7 @@ import { EditorArea } from "./components/EditorArea";
 import { PermissionModal } from "./components/PermissionModal";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { SplashScreen } from "./components/SplashScreen";
 import { TitleBar } from "./components/TitleBar";
 import { fileName, languageFromPath } from "./lib/language";
 import {
@@ -916,6 +917,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      <SplashScreen />
       <TitleBar
         workspace={workspace}
         onOpenFolder={() => void openFolder()}

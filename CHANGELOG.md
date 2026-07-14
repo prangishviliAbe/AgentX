@@ -5,6 +5,13 @@ All notable changes to **AgentX** (codename **AbeX**) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.3] — 2026-07-14
+
+### Added
+
+- **Boot splash** on launch — large **AgentX** title with **codename AbeX** below, then a smooth fade-out into the main UI
+- Respects `prefers-reduced-motion` (short, non-animated hold)
+
 ## [1.1.2] — 2026-07-14
 
 ### Fixed
