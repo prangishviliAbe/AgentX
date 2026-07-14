@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AgentX Cover</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        width: 1280px;
+        height: 640px;
+        overflow: hidden;
+        background: #0e0f10;
+        color: #d6d6d4;
+        /* System stack — no network dependency when rendering offline */
+        font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      .stage {
+        position: relative;
+        width: 1280px;
+        height: 640px;
+        background:
+          radial-gradient(ellipse 80% 70% at 12% 100%, rgba(0, 98, 168, 0.14), transparent 55%),
+          radial-gradient(ellipse 50% 45% at 92% 8%, rgba(180, 140, 70, 0.06), transparent 50%),
+          linear-gradient(165deg, #121314 0%, #0e0f10 48%, #0b0c0d 100%);
+      }
+
+      /* Fine grid — architectural, not wallpaper orbs */
+      .grid {
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(rgba(255, 255, 255, 0.028) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: radial-gradient(ellipse 75% 80% at 50% 50%, #000 20%, transparent 75%);
+        pointer-events: none;
+      }
+
+      /* Left gutter accent */
+      .rail {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        background: linear-gradient(180deg, #0a84d0 0%, #0a84d0 42%, #2a2d2e 42%, #2a2d2e 100%);
+      }
+
+      .content {
+        position: relative;
+        z-index: 2;
+        height: 100%;
+        padding: 56px 72px 52px 80px;
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+      }
+
+      .top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .mark {
+        width: 40px;
+        height: 40px;
+        border-radius: 7px;
+        background: #0a84d0;
+        color: #fff;
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-weight: 600;
+        font-size: 20px;
+        display: grid;
+        place-items: center;
+        letter-spacing: -0.03em;
+        box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.18);
+      }
+
+      .brand-name {
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-size: 18px;
+        font-weight: 500;
+        letter-spacing: 0.04em;
+        color: #ececec;
+      }
+
+      .meta {
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-size: 12px;
+        color: #8a8a86;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+
+      .hero {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        max-width: 720px;
+        padding-bottom: 12px;
+      }
+
+      .kicker {
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-size: 13px;
+        font-weight: 500;
+        color: #0a84d0;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        margin-bottom: 18px;
+      }
+
+      h1 {
+        font-size: 54px;
+        font-weight: 600;
+        line-height: 1.08;
+        letter-spacing: -0.035em;
+        color: #f2f2f0;
+        margin-bottom: 20px;
+      }
+
+      h1 em {
+        font-style: normal;
+        color: #9aa0a6;
+        font-weight: 500;
+      }
+
+      .lede {
+        font-size: 20px;
+        line-height: 1.45;
+        color: #9b9b96;
+        max-width: 34ch;
+        font-weight: 400;
+      }
+
+      .bottom {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 32px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-size: 12px;
+        color: #b8b8b3;
+        border: 1px solid #2c2e30;
+        background: rgba(255, 255, 255, 0.02);
+        padding: 7px 12px;
+        border-radius: 4px;
+      }
+
+      .author {
+        text-align: right;
+        font-size: 13px;
+        color: #7a7a76;
+        line-height: 1.5;
+      }
+
+      .author strong {
+        display: block;
+        color: #c8c8c4;
+        font-weight: 500;
+        font-size: 14px;
+      }
+
+      /* Abstract IDE silhouette — right side, restrained */
+      .panel {
+        position: absolute;
+        right: 56px;
+        top: 88px;
+        width: 380px;
+        height: 420px;
+        border: 1px solid #2a2c2e;
+        border-radius: 8px;
+        background: linear-gradient(180deg, #161718 0%, #121314 100%);
+        box-shadow:
+          0 24px 48px rgba(0, 0, 0, 0.35),
+          inset 0 1px 0 rgba(255, 255, 255, 0.04);
+        overflow: hidden;
+        z-index: 1;
+      }
+
+      .panel-bar {
+        height: 32px;
+        border-bottom: 1px solid #252728;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 12px;
+        background: #141516;
+      }
+
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #3a3c3e;
+      }
+
+      .dot:nth-child(1) {
+        background: #4a4a48;
+      }
+
+      .panel-body {
+        display: grid;
+        grid-template-columns: 44px 1fr;
+        height: calc(100% - 32px);
+      }
+
+      .activity {
+        border-right: 1px solid #252728;
+        background: #18191a;
+        padding: 12px 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 14px;
+      }
+
+      .act {
+        width: 18px;
+        height: 18px;
+        border-radius: 3px;
+        background: #2e3032;
+      }
+
+      .act.on {
+        background: #0a84d0;
+        box-shadow: -2px 0 0 #e8e8e6;
+      }
+
+      .code {
+        padding: 16px 14px;
+        font-family: "Cascadia Mono", "Consolas", "Courier New", monospace;
+        font-size: 11.5px;
+        line-height: 1.65;
+        color: #7d8288;
+      }
+
+      .code .ln {
+        display: block;
+        white-space: nowrap;
+      }
+
+      .code .c {
+        color: #5c6370;
+      }
+
+      .code .k {
+        color: #7aa2c7;
+      }
+
+      .code .s {
+        color: #a3b18a;
+      }
+
+      .code .f {
+        color: #c4a35a;
+      }
+
+      .code .cursor {
+        display: inline-block;
+        width: 7px;
+        height: 13px;
+        background: #0a84d0;
+        vertical-align: -1px;
+        margin-left: 1px;
+        opacity: 0.9;
+      }
+
+      .chat-strip {
+        position: absolute;
+        right: 0;
+        top: 32px;
+        bottom: 0;
+        width: 118px;
+        border-left: 1px solid #252728;
+        background: #151617;
+        padding: 12px 10px;
+      }
+
+      .bubble {
+        height: 28px;
+        border-radius: 5px;
+        background: #1f2123;
+        margin-bottom: 8px;
+      }
+
+      .bubble.user {
+        background: #1a3348;
+        margin-left: 18px;
+      }
+
+      .bubble.ai {
+        width: 78%;
+      }
+
+      .bubble.sm {
+        height: 18px;
+        width: 55%;
+        opacity: 0.7;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stage">
+      <div class="grid"></div>
+      <div class="rail"></div>
+
+      <div class="panel" aria-hidden="true">
+        <div class="panel-bar">
+          <span class="dot"></span>
+          <span class="dot"></span>
+          <span class="dot"></span>
+        </div>
+        <div class="panel-body">
+          <div class="activity">
+            <div class="act on"></div>
+            <div class="act"></div>
+            <div class="act"></div>
+            <div class="act"></div>
+          </div>
+          <div class="code">
+            <span class="ln"><span class="c">// workspace · agent turn</span></span>
+            <span class="ln"
+              ><span class="k">async</span> <span class="k">function</span>
+              <span class="f">prompt</span>(text) {</span
+            >
+            <span class="ln">  <span class="k">await</span> acp.send(text)</span>
+            <span class="ln">  <span class="k">return</span> stream<span class="cursor"></span></span>
+            <span class="ln">}</span>
+            <span class="ln">&nbsp;</span>
+            <span class="ln"
+              ><span class="k">const</span> shell =
+              <span class="s">"powershell"</span></span
+            >
+            <span class="ln"
+              ><span class="k">const</span> mode =
+              <span class="s">"interactive"</span></span
+            >
+          </div>
+          <div class="chat-strip">
+            <div class="bubble user sm"></div>
+            <div class="bubble ai"></div>
+            <div class="bubble ai sm"></div>
+            <div class="bubble user sm"></div>
+            <div class="bubble ai"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="top">
+          <div class="brand">
+            <div class="mark">A</div>
+            <div class="brand-name">AgentX</div>
+          </div>
+          <div class="meta">v1.0 · Desktop</div>
+        </div>
+
+        <div class="hero">
+          <div class="kicker">Grok coding agent shell</div>
+          <h1>Work with Grok<br /><em>like an IDE</em></h1>
+          <p class="lede">
+            Explorer, Monaco editor, chat, permissions, diffs, and a real
+            terminal — over your local Grok CLI.
+          </p>
+        </div>
+
+        <div class="bottom">
+          <div class="chips">
+            <span class="chip">Electron</span>
+            <span class="chip">Monaco</span>
+            <span class="chip">ACP</span>
+            <span class="chip">Permissions</span>
+            <span class="chip">Diff review</span>
+            <span class="chip">Terminal</span>
+          </div>
+          <div class="author">
+            <strong>Abe Prangishvili</strong>
+            github.com/prangishviliAbe/AgentX
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
