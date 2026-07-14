@@ -18,3 +18,4 @@ coverage
 # Local / tool dumps (not part of the app)
 mcps/
 .grok/
+scripts/_cover-runner.cjs
