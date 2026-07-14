@@ -14,7 +14,7 @@ Edit code, chat with Grok, approve tools, review diffs, and run a real terminal 
 | **Product** | AgentX |
 | **Codename** | AbeX |
 | **Author** | Abe Prangishvili |
-| **Version** | 1.1.0 |
+| **Version** | 1.1.1 |
 | **License** | MIT |
 | **Repo** | [github.com/prangishviliAbe/AgentX](https://github.com/prangishviliAbe/AgentX) |
 
@@ -40,28 +40,23 @@ Full release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ## Changelog
 
-### 1.1.0 — 2026-07-14
+### 1.1.1 — 2026-07-14
 
 **Added**
 
-- Chat header **Auto** toggle (persist auto-continue without opening Settings)
-- **Plan first** and **Show thinking** settings
-- Live thinking panel + durable “thinking” messages
-- Image paste/attach for screenshot analysis (ACP image blocks)
-- **Stop** button, turn timeout, and silence auto-stop so the UI does not freeze
-- ACP `fs/*` + `terminal/*` client handlers so the agent can read the workspace correctly
-- Branding: product **AgentX**, English **codename AbeX**
+- Markdown rendering for assistant replies (headings, bold, lists, code)
+- **Activity rail** + header **Active** pill while the agent thinks/works
+- Immediate busy feedback on Send (before the first ACP chunk)
 
-**Fixed**
+**Fixed / Changed**
 
-- Windows PowerShell one-liner spawn crash (`ENOENT` / main-process error dialog)
-- Stuck **Grok · working…** after auto-continue (no more cancel-before-every-prompt)
-- Missing final assistant text after tools
-- Tool status spam and weak incomplete-answer detection
+- No more raw `**` / `###` in chat
+- Polished message cards, role badges, and status-bar busy state
+- Activity status stays accurate (Thinking / Tool / Writing)
 
-**Changed**
+### 1.1.0 — 2026-07-14
 
-- Settings file: `~/.agentx/settings.json`
+Auto-continue header toggle, plan-first mode, show thinking, image attach, Stop, ACP fs/terminal handlers, branding (AgentX / codename AbeX). Reliability fixes for PowerShell spawn and stuck busy state.
 
 ### 1.0.0 — 2026-07-14
 
@@ -130,7 +125,7 @@ npm run dist
 
 Artifacts:
 
-- `release/AgentX Setup 1.1.0.exe` — installer  
+- `release/AgentX Setup 1.1.1.exe` — installer  
 - `release/win-unpacked/AgentX.exe` — portable run  
 
 ---

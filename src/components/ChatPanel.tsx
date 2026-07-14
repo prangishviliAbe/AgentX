@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { renderMarkdown } from "../lib/markdown";
 import type { ChatImage, ChatMessage } from "../types";
 
 type Props = {
@@ -44,6 +45,23 @@ async function fileToChatImage(file: File): Promise<ChatImage> {
   };
 }
 
+function roleLabel(role: ChatMessage["role"]): string {
+  switch (role) {
+    case "user":
+      return "You";
+    case "assistant":
+      return "Assistant";
+    case "thought":
+      return "Thinking";
+    case "tool":
+      return "Tool";
+    case "system":
+      return "System";
+    default:
+      return role;
+  }
+}
+
 export function ChatPanel({
   messages,
   busy,
@@ -65,10 +83,17 @@ export function ChatPanel({
   const [attachError, setAttachError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const thoughtEndRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, busy]);
+  }, [messages, busy, liveThought, activityHint]);
+
+  useEffect(() => {
+    if (liveThought) {
+      thoughtEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [liveThought]);
 
   const addImages = async (files: FileList | File[]) => {
     setAttachError(null);
@@ -93,7 +118,6 @@ export function ChatPanel({
     setDraft("");
     setAttachments([]);
     setAttachError(null);
-    // If a turn is stuck "busy", unlock then send
     if (busy && onStop) {
       onStop();
       window.setTimeout(() => onSend(payload.text, payload.images), 120);
@@ -105,17 +129,29 @@ export function ChatPanel({
   return (
     <aside className="chat-panel">
       <div className="chat-header">
-        <span>
-          Grok
+        <div className="chat-header-left">
+          <span className="chat-title">Grok</span>
           {busy ? (
-            <span className="chat-busy-label"> · working…</span>
-          ) : null}
-        </span>
+            <span
+              className="status-pill active"
+              title={activityHint || "Agent is working"}
+            >
+              <span className="status-dot-live" />
+              Active
+              <span className="status-pill-hint">
+                {" "}
+                · {activityHint || "Thinking…"}
+              </span>
+            </span>
+          ) : (
+            <span className="status-pill idle">Ready</span>
+          )}
+        </div>
         <div className="chat-header-actions">
           {onToggleAutoContinue && (
             <label
               className={`auto-chip ${autoContinue ? "on" : ""}`}
-              title="When on, AgentX continues automatically — no Continue spam"
+              title="Auto-continue incomplete answers"
             >
               <input
                 type="checkbox"
@@ -126,12 +162,7 @@ export function ChatPanel({
             </label>
           )}
           {busy && onStop && (
-            <button
-              type="button"
-              className="btn"
-              title="Stop stuck turn and unlock chat"
-              onClick={onStop}
-            >
+            <button type="button" className="btn" onClick={onStop}>
               Stop
             </button>
           )}
@@ -139,7 +170,6 @@ export function ChatPanel({
             <button
               type="button"
               className="btn btn-primary"
-              title="Force agent to continue"
               onClick={() => {
                 if (busy && onStop) onStop();
                 window.setTimeout(() => onContinue(), busy ? 80 : 0);
@@ -155,26 +185,36 @@ export function ChatPanel({
       </div>
 
       <div className="chat-messages">
-        {messages.length === 0 && (
-          <div className="msg system">
-            Ask Grok to explore, edit, or explain code. Paste or attach
-            screenshots for visual analysis. Tools run via local{" "}
-            <code>grok agent</code>.
+        {messages.length === 0 && !busy && (
+          <div className="msg system empty-chat">
+            <strong>Chat with Grok</strong>
+            <span>
+              Ask about the open folder, paste a screenshot, or request a plan.
+              Tools run through your local <code>grok agent</code>.
+            </span>
           </div>
         )}
+
         {messages.map((m) => {
-          if (m.role === "thought" && !showThinking) return null;
+          // Live thoughts stream in the activity rail — avoid duplicate history while streaming
+          if (m.role === "thought") {
+            if (!showThinking) return null;
+            if (m.streaming && busy) return null;
+          }
           return (
-            <div key={m.id} className={`msg ${m.role}`}>
-              <div className="msg-role">
-                {m.role === "thought"
-                  ? "thinking"
-                  : m.role === "assistant"
-                    ? "assistant"
-                    : m.role}
-                {m.streaming ? " · live" : ""}
-                {m.meta ? ` · ${m.meta}` : ""}
-              </div>
+            <article key={m.id} className={`msg msg-card ${m.role}`}>
+              <header className="msg-role">
+                <span className={`role-badge role-${m.role}`}>
+                  {roleLabel(m.role)}
+                </span>
+                {m.streaming ? (
+                  <span className="live-tag">
+                    <span className="status-dot-live sm" />
+                    live
+                  </span>
+                ) : null}
+                {m.meta ? <span className="msg-meta">{m.meta}</span> : null}
+              </header>
               {m.images && m.images.length > 0 && (
                 <div className="msg-images">
                   {m.images.map((img) => (
@@ -188,40 +228,60 @@ export function ChatPanel({
                   ))}
                 </div>
               )}
-              {m.content || (m.streaming ? "…" : "")}
-            </div>
+              <div className="msg-body">
+                {m.role === "assistant"
+                  ? renderMarkdown(m.content || (m.streaming ? "…" : ""))
+                  : m.role === "system"
+                    ? m.content.includes("**") || m.content.includes("###")
+                      ? renderMarkdown(m.content)
+                      : m.content || (m.streaming ? "…" : "")
+                    : m.content || (m.streaming ? "…" : "")}
+              </div>
+            </article>
           );
         })}
-        {showThinking && liveThought && (
-          <div className="live-thought-panel">
-            <div className="live-thought-title">Thinking (live)</div>
-            <div className="live-thought-body">{liveThought}</div>
-          </div>
-        )}
+
+        {/* Always-visible while busy — immediate feedback before first chunk */}
         {busy && (
-          <div className="msg system busy-banner">
-            <div>
-              <strong>{activityHint || "Working…"}</strong>
+          <div className="activity-rail" aria-live="polite" aria-busy="true">
+            <div className="activity-rail-top">
+              <span className="status-dot-live" />
+              <strong>{activityHint || "Thinking… agent is active"}</strong>
             </div>
-            <div style={{ marginTop: 6 }}>
-              If stuck: press <strong>Stop</strong>, then <strong>Continue</strong>{" "}
-              or send a new message.
+            {showThinking && liveThought ? (
+              <div className="activity-thought">
+                <div className="activity-thought-label">Thinking</div>
+                <div className="activity-thought-text">{liveThought}</div>
+                <div ref={thoughtEndRef} />
+              </div>
+            ) : showThinking ? (
+              <div className="thinking-skeleton" aria-hidden>
+                <span />
+                <span />
+                <span />
+              </div>
+            ) : null}
+            <div className="activity-rail-foot">
+              {autoContinue
+                ? "Auto-continue is on — agent will keep going when needed."
+                : (
+                  <>
+                    Press <strong>Stop</strong> if this hangs.
+                  </>
+                )}
             </div>
           </div>
         )}
+
         <div ref={bottomRef} />
       </div>
 
       <div className="chat-composer">
         {disabledReason && (
-          <div className="msg system" style={{ margin: 0 }}>
-            {disabledReason}
-          </div>
+          <div className="composer-alert">{disabledReason}</div>
         )}
         {attachError && (
-          <div className="msg system" style={{ margin: 0, color: "#ffb3b3" }}>
-            {attachError}
-          </div>
+          <div className="composer-alert error">{attachError}</div>
         )}
         {attachments.length > 0 && (
           <div className="attach-row">
@@ -248,8 +308,8 @@ export function ChatPanel({
           value={draft}
           placeholder={
             busy
-              ? "შეგიძლია აკრიფო — Send/Stop განბლოკავს გაჭედილ turn-ს…"
-              : "Message Grok… Paste screenshot (Ctrl+V), attach image, Enter to send"
+              ? "Agent is active — you can still type; Stop unlocks a stuck turn…"
+              : "Message Grok… (Enter to send, Shift+Enter for newline)"
           }
           disabled={Boolean(disabledReason)}
           onChange={(e) => setDraft(e.target.value)}
@@ -310,24 +370,24 @@ export function ChatPanel({
                 })();
               }}
             >
-              🖼 Attach
+              Attach
             </button>
             <span className="composer-hint">
               {busy
                 ? autoContinue
-                  ? "Auto on — continuing without you…"
-                  : "Working… use Stop if stuck"
+                  ? "Auto on · agent continues on its own"
+                  : "Agent active · Stop if stuck"
                 : attachments.length
-                  ? `${attachments.length} image(s) · paste OK`
+                  ? `${attachments.length} image(s)`
                   : autoContinue
-                    ? "Auto on — will continue by itself"
-                    : "Auto off — use Continue if incomplete"}
+                    ? "Auto on"
+                    : "Auto off"}
             </span>
           </div>
           {busy ? (
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-danger"
               onClick={() => onStop?.()}
             >
               Stop

@@ -5,6 +5,27 @@ All notable changes to **AgentX** (codename **AbeX**) are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.1] — 2026-07-14
+
+### Added
+
+- Lightweight **markdown renderer** for assistant replies (`**bold**`, headings, lists, code fences, blockquotes)
+- **Activity rail** while the agent is busy — live thinking stream or skeleton shimmer before the first chunk
+- **Status pill** in chat header (`Active · …` / `Ready`) with live pulse indicator
+- Unit tests for markdown rendering and chat activity wiring
+
+### Changed
+
+- Chat UI polish: message cards, role badges, tool/thought styling, composer, wider chat panel
+- Status bar shows a clearer busy state (`Grok · working…`)
+- Busy + activity hint start **immediately on Send**, not only after the first ACP event
+- Streaming thoughts show in the activity rail (no duplicate bubble while live)
+
+### Fixed
+
+- Raw markdown markers (`**`, `###`) no longer appear unstyled in assistant messages
+- Activity hint no longer cleared on every ACP update (status stays accurate: Thinking / Tool / Writing)
+
 ## [1.1.0] — 2026-07-14
 
 ### Added

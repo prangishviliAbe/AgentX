@@ -52,5 +52,20 @@ describe("UI/IPC structural wiring", () => {
     assert.ok(read("electron/main.ts").includes("dialog:open-images"));
     assert.ok(read("electron/acp/clientHandlers.ts").includes("fs/read_text_file"));
   });
+
+  it("chat activity rail + markdown assistant render exist", () => {
+    const chat = read("src/components/ChatPanel.tsx");
+    const css = read("src/styles/global.css");
+    assert.ok(chat.includes("activity-rail"));
+    assert.ok(chat.includes("status-pill"));
+    assert.ok(chat.includes("renderMarkdown"));
+    assert.ok(chat.includes("liveThought"));
+    assert.ok(existsSync(path.join(root, "src/lib/markdown.ts")));
+    assert.ok(css.includes(".activity-rail"));
+    assert.ok(css.includes(".md-h"));
+    assert.ok(css.includes(".thinking-skeleton"));
+    assert.ok(read("src/App.tsx").includes("setLiveThought"));
+    assert.ok(read("src/App.tsx").includes("activityHint"));
+  });
 });
 

@@ -14,16 +14,22 @@ export function StatusBar({ auth, agent, language }: Props) {
       : "";
 
   return (
-    <footer className={`status-bar ${mode}`}>
+    <footer className={`status-bar ${mode} ${agent.busy ? "is-busy" : ""}`}>
       <div className="status-left">
         <span
           className={`status-dot ${agent.running ? (agent.busy ? "busy" : "") : "off"}`}
-          title={agent.running ? "Agent connected" : "Agent offline"}
+          title={
+            agent.busy
+              ? "Agent is actively working"
+              : agent.running
+                ? "Agent connected"
+                : "Agent offline"
+          }
         />
         <span>
           {agent.running
             ? agent.busy
-              ? "Grok · working"
+              ? "Grok · working…"
               : "Grok · ready"
             : "Grok · offline"}
         </span>

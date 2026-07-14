@@ -207,7 +207,6 @@ export default function App() {
     const offs = [
       window.agentx.on("acp:update", (updateUnknown) => {
         lastAcpAt.current = Date.now();
-        setActivityHint(null);
         const update = updateUnknown as {
           sessionUpdate?: string;
           content?: { text?: string } | string | unknown[];
@@ -677,6 +676,12 @@ export default function App() {
   };
 
   const sendPrompt = async (text: string, images: ChatImage[] = []) => {
+    // Immediate UI feedback — user sees Active + thinking rail before ACP connects
+    setAgent((a) => ({ ...a, busy: true, lastError: null }));
+    setActivityHint("Starting…");
+    setLiveThought("");
+    lastAcpAt.current = Date.now();
+
     const maxSteps = autoContinue
       ? Math.min(5, Math.max(1, autoContinueMax))
       : 0;
