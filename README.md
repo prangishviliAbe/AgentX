@@ -40,13 +40,15 @@ Full release notes: **[CHANGELOG.md](./CHANGELOG.md)**
 
 ## Changelog
 
+### 1.1.3 — 2026-07-14
+
+**Added**
+
+- Boot splash: large **AgentX** + **codename AbeX**, then fade into the app
+
 ### 1.1.2 — 2026-07-14
 
-**Fixed**
-
-- Auto-continue no longer freezes with “No agent activity for 47s…”
-- Terminal tools time out instead of hanging the whole turn
-- Busy state clears on cancel/timeout; chain stops cleanly
+Auto-continue hang fix, terminal tool timeouts, cleaner busy unlock.
 
 ### 1.1.1 — 2026-07-14
 
@@ -123,7 +125,7 @@ npm run dist
 
 Artifacts:
 
-- `release/AgentX Setup 1.1.2.exe` — installer  
+- `release/AgentX Setup 1.1.3.exe` — installer  
 - `release/win-unpacked/AgentX.exe` — portable run  
 
 ---
