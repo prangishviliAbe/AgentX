@@ -562,7 +562,13 @@ export default function App() {
   const runAgentTurn = async (
     text: string,
     images: ChatImage[] = [],
-    opts?: { silentUser?: boolean; timeoutMs?: number; noMoreTools?: boolean },
+    opts?: {
+      silentUser?: boolean;
+      timeoutMs?: number;
+      noMoreTools?: boolean;
+      holdBusy?: boolean;
+      userQuestion?: string;
+    },
   ): Promise<{ text: string; toolsRan: boolean }> => {
     streamingId.current = null;
     thoughtId.current = null;
@@ -588,35 +594,34 @@ export default function App() {
         {
           id: uid(),
           role: "system",
-          content: autoContinue
-            ? "Auto-continue…"
-            : "Continuing…",
+          content: "Auto… finishing answer",
         },
       ]);
     }
 
     setAgent((a) => ({ ...a, busy: true, lastError: null }));
     lastAcpAt.current = Date.now();
-    setActivityHint("Starting turn…");
+    setActivityHint(opts?.silentUser ? "Auto-continue…" : "Starting turn…");
     setLiveThought("");
 
     try {
-      // Clear any stuck prior turn before starting
-      try {
-        await window.agentx.acpCancel();
-      } catch {
-        // ignore
-      }
-      await new Promise((r) => setTimeout(r, 80));
-
+      // Do NOT cancel here — cancel-before-prompt hung the next turn.
       const st = (await window.agentx.acpStatus()) as { running?: boolean };
       if (!st.running) {
         await startAgent();
       }
+
+      let promptText = text;
+      if (opts?.silentUser && opts.userQuestion) {
+        promptText =
+          `Original user question:\n${opts.userQuestion}\n\n` +
+          `Your previous reply was incomplete or only a plan. ${text}`;
+      }
+      if (opts?.noMoreTools) {
+        promptText = `${promptText}\n\n${CONTINUE_PROMPT_NO_TOOLS}`;
+      }
+
       const snapshotPaths = tabs.map((t) => t.path);
-      const promptText = opts?.noMoreTools
-        ? `${text}\n\n${CONTINUE_PROMPT_NO_TOOLS}`
-        : text;
       const result = (await window.agentx.acpPrompt(
         promptText,
         snapshotPaths,
@@ -625,7 +630,7 @@ export default function App() {
           data: img.data,
           uri: img.name ? `attachment://${img.name}` : undefined,
         })),
-        { timeoutMs: opts?.timeoutMs ?? 180_000 },
+        { timeoutMs: opts?.timeoutMs ?? 120_000 },
       )) as { assistantText?: string } | boolean;
 
       const finalText =
@@ -637,19 +642,13 @@ export default function App() {
       return { text: finalText, toolsRan: toolsThisTurn.current > 0 };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      const cancelled = /cancel|timed out/i.test(message);
       setMessages((prev) => [
         ...prev,
-        {
-          id: uid(),
-          role: "system",
-          content: message,
-        },
+        { id: uid(), role: "system", content: message },
       ]);
       setAgent((a) => ({
         ...a,
-        lastError: cancelled ? null : message,
-        busy: false,
+        lastError: /cancel|timed out/i.test(message) ? null : message,
       }));
       return { text: "", toolsRan: toolsThisTurn.current > 0 };
     } finally {
@@ -660,12 +659,20 @@ export default function App() {
           prev.map((m) => (m.id === id ? { ...m, streaming: false } : m)),
         );
       }
-      thoughtId.current = null;
-      setAgent((a) => ({ ...a, busy: false }));
-      setActivityHint(null);
+      if (thoughtId.current) {
+        const tid = thoughtId.current;
+        thoughtId.current = null;
+        setMessages((prev) =>
+          prev.map((m) => (m.id === tid ? { ...m, streaming: false } : m)),
+        );
+      }
       setLiveThought("");
-      if (workspace) void refreshTree(workspace);
-      void refreshChanges();
+      if (!opts?.holdBusy) {
+        setAgent((a) => ({ ...a, busy: false }));
+        setActivityHint(null);
+        if (workspace) void refreshTree(workspace);
+        void refreshChanges();
+      }
     }
   };
 
@@ -674,8 +681,11 @@ export default function App() {
       ? Math.min(5, Math.max(1, autoContinueMax))
       : 0;
     autoContinueLeft.current = maxSteps;
+    const userQuestion = text;
 
-    let result = await runAgentTurn(text, images);
+    let result = await runAgentTurn(text, images, {
+      holdBusy: autoContinue && maxSteps > 0,
+    });
     let step = 0;
 
     while (
@@ -685,20 +695,30 @@ export default function App() {
     ) {
       autoContinueLeft.current -= 1;
       step += 1;
-      // Later continues: prefer answering without another long tool chain
       result = await runAgentTurn(CONTINUE_PROMPT, [], {
         silentUser: true,
-        timeoutMs: 90_000,
-        noMoreTools: step >= 2,
+        timeoutMs: 75_000,
+        noMoreTools: step >= 1 || result.toolsRan,
+        holdBusy: autoContinueLeft.current > 0,
+        userQuestion,
       });
     }
+
+    setAgent((a) => ({ ...a, busy: false }));
+    setActivityHint(null);
+    if (workspace) void refreshTree(workspace);
+    void refreshChanges();
   };
 
   const continueAgent = async () => {
     if (agent.busy) {
-      await window.agentx.acpCancel();
+      try {
+        await window.agentx.acpCancel();
+      } catch {
+        // ignore
+      }
       setAgent((a) => ({ ...a, busy: false }));
-      await new Promise((r) => setTimeout(r, 100));
+      await new Promise((r) => setTimeout(r, 150));
     }
     const maxSteps = autoContinue
       ? Math.min(5, Math.max(1, autoContinueMax))
@@ -706,22 +726,24 @@ export default function App() {
     autoContinueLeft.current = maxSteps;
     let result = await runAgentTurn(CONTINUE_PROMPT, [], {
       silentUser: true,
-      timeoutMs: 90_000,
+      timeoutMs: 75_000,
+      holdBusy: autoContinue && maxSteps > 1,
     });
-    let step = 0;
     while (
       autoContinue &&
       autoContinueLeft.current > 0 &&
       shouldAutoContinue(result.text, { toolsRan: result.toolsRan })
     ) {
       autoContinueLeft.current -= 1;
-      step += 1;
       result = await runAgentTurn(CONTINUE_PROMPT, [], {
         silentUser: true,
-        timeoutMs: 90_000,
-        noMoreTools: step >= 1,
+        timeoutMs: 75_000,
+        noMoreTools: true,
+        holdBusy: autoContinueLeft.current > 0,
       });
     }
+    setAgent((a) => ({ ...a, busy: false }));
+    setActivityHint(null);
   };
 
   const stopAgent = async () => {
@@ -732,6 +754,7 @@ export default function App() {
       // ignore
     }
     setAgent((a) => ({ ...a, busy: false }));
+    setActivityHint(null);
     streamingId.current = null;
     thoughtId.current = null;
     setMessages((prev) => [
@@ -739,7 +762,7 @@ export default function App() {
       {
         id: uid(),
         role: "system",
-        content: "გაჩერებულია. ახლა შეგიძლია ახალი შეტყობინება ან Continue.",
+        content: "Stopped. You can type a new message now.",
       },
     ]);
   };

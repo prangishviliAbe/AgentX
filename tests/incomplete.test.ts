@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { looksLikeIncompletePlan } from "../src/lib/incomplete.ts";
+import {
+  looksLikeIncompletePlan,
+  shouldAutoContinue,
+} from "../src/lib/incomplete.ts";
 
 describe("looksLikeIncompletePlan", () => {
   it("detects short Georgian plan-only reply", () => {
@@ -8,6 +11,21 @@ describe("looksLikeIncompletePlan", () => {
       looksLikeIncompletePlan(
         "პროექტს გადავხედავ სტრუქტურით, კოდით და დოკუმენტაციით, შემდეგ მოკლე შეფასებას მოგცემ.",
       ),
+      true,
+    );
+  });
+
+  it("detects folder glance without listing", () => {
+    assert.equal(
+      looksLikeIncompletePlan(
+        "პროექტს გადავხედავ, რომ გავიგო რაა აქ თემაში.",
+      ),
+      true,
+    );
+    assert.equal(
+      shouldAutoContinue("პროექტს გადავხედავ, რომ გავიგო რაა აქ თემაში.", {
+        toolsRan: true,
+      }),
       true,
     );
   });
